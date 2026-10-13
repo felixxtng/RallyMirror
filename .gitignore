@@ -11,3 +11,5 @@ outputs/*
 !outputs/.gitkeep
 *.pt
 *.pth
+
+models/*.task

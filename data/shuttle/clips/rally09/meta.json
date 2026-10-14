@@ -1,0 +1,20 @@
+{
+  "video": "/Users/felix/Desktop/RallyMirror-main/data/shuttle/videos/rally09.mp4",
+  "source_group": "match04",
+  "split": "train",
+  "fps": 60.0,
+  "original_width": 2810,
+  "original_height": 1638,
+  "start_frame": 0,
+  "frame_count": 393,
+  "transform": {
+    "width": 960,
+    "height": 544,
+    "resized_width": 933,
+    "resized_height": 544,
+    "scale_x": 0.3320284697508897,
+    "scale_y": 0.3321123321123321,
+    "pad_x": 13,
+    "pad_y": 0
+  }
+}

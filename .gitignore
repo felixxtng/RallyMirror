@@ -12,4 +12,13 @@ outputs/*
 *.pt
 *.pth
 
-models/*.task
+# Shuttle annotations; videos and extracted frames stay excluded
+!data/shuttle/
+data/shuttle/*
+!data/shuttle/clips/
+data/shuttle/clips/*
+!data/shuttle/clips/*/
+data/shuttle/clips/*/*
+!data/shuttle/clips/*/labels.csv
+!data/shuttle/clips/*/meta.json
+!data/shuttle/README.md

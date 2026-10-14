@@ -28,7 +28,7 @@ class GeometryTests(unittest.TestCase):
             self.assertIsNone(bounds(Frame(), box))
 
     def test_mapping_and_missing_pose(self):
-        namespace.update(NAMES=["nose"],
+        namespace.update(NAMES=["nose"], REMOVED_LANDMARKS=set(),
             cv2=NS(COLOR_BGR2RGB=1, cvtColor=lambda crop, code: crop),
             mp=NS(ImageFormat=NS(SRGB=1), Image=lambda **kwargs: kwargs))
         pose = namespace["PlayerPose"].__new__(namespace["PlayerPose"])
@@ -41,6 +41,27 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual(pose.extract(Frame(), None), [])
         pose.model = NS(detect=lambda image: NS(pose_landmarks=[]))
         self.assertEqual(pose.extract(Frame(), {"bbox": [50, 20, 150, 80]}), [])
+
+    def test_removed_landmarks_are_excluded(self):
+        namespace.update(
+            NAMES=[f"point_{i}" for i in range(33)],
+            REMOVED_LANDMARKS={1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+                               17, 18, 19, 20, 21, 22},
+            cv2=NS(COLOR_BGR2RGB=1, cvtColor=lambda crop, code: crop),
+            mp=NS(ImageFormat=NS(SRGB=1), Image=lambda **kwargs: kwargs),
+        )
+        landmark = NS(x=0.5, y=0.5, visibility=1.0, presence=1.0)
+        pose = namespace["PlayerPose"].__new__(namespace["PlayerPose"])
+        pose.model = NS(detect=lambda image: NS(pose_landmarks=[[landmark] * 33]))
+
+        points = pose.extract(Frame(), {"bbox": [50, 20, 150, 80]})
+
+        self.assertEqual(len(points), 17)
+        self.assertEqual(
+            {point["name"] for point in points},
+            {f"point_{i}" for i in range(33)} -
+            {f"point_{i}" for i in namespace["REMOVED_LANDMARKS"]},
+        )
 
 if __name__ == "__main__":
     unittest.main()

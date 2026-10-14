@@ -11,6 +11,7 @@ outputs/*
 !outputs/.gitkeep
 *.pt
 *.pth
+*.task
 
 # Shuttle annotations; videos and extracted frames stay excluded
 !data/shuttle/

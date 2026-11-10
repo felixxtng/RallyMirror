@@ -22,3 +22,8 @@ data/shuttle/clips/*/*
 !data/shuttle/clips/*/labels.csv
 !data/shuttle/clips/*/meta.json
 !data/shuttle/README.md
+
+# Court module outputs
+dataset/
+runs/
+calibration_pred/

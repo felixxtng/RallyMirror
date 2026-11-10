@@ -3,11 +3,15 @@ import cv2
 
 from src.video.reader import open_video
 from src.detection.tracker import PlayerTracker
-from src.detection.target_selector import select_target
+from src.detection.target_selector import select_targets, load_selection_config
 
 
 def run_demo(video_path, output_path, data_path):
     video = open_video(video_path)
+
+    # Selection thresholds (confidence + geometry safeguards) come from
+    # configs/default.yaml -> detection.target_selection.
+    selection_config = load_selection_config()
 
     fps = video.get(cv2.CAP_PROP_FPS)
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -31,9 +35,9 @@ def run_demo(video_path, output_path, data_path):
             break
 
         tracks = tracker.track_people(frame)
-        target = select_target(tracks)
+        targets = select_targets(tracks, selection_config)
 
-        if target is not None:
+        for target in targets:
             x1, y1, x2, y2 = map(int, target["bbox"])
 
             cv2.rectangle(
@@ -77,7 +81,7 @@ def run_demo(video_path, output_path, data_path):
 
 if __name__ == "__main__":
     run_demo(
-        "data/sample/singles_short_01.mp4",
-        "outputs/player_tracking_demo.mp4",
+        "data/videos/rally01.mp4",
+        "outputs/rally01_tracking_demo.mp4",
         "outputs/tracking.jsonl"
     )

@@ -8,3 +8,4 @@ pandas
 matplotlib
 pyyaml
 lap>=0.5.12
+pytest

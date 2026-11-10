@@ -1,0 +1,101 @@
+# RallyMirror configuration (own-data collection + annotation POC)
+#
+# Scope: singles only. The POC centres on collecting and annotating our OWN
+# footage, producing a curated labeled dataset, and a demo video overlaying
+# tracking + annotations. No learned predictions in the demo; training and any
+# BFMD import are future work.
+
+project:
+  name: RallyMirror
+  mode: poc
+  discipline: singles
+
+paths:
+  # Raw self-sourced clips land here; intake organizes them into dataset/.
+  raw_clips: data/sample
+  # Curated dataset root (manifest, poses, annotations, labeled dataset).
+  dataset_root: data/dataset
+  # Demo + intermediate artifacts.
+  outputs: outputs
+  # YOLO weights used by the player tracker.
+  yolo_weights: yolo11n.pt
+
+video:
+  # BFMD convention we align to for portability (see schema reference note).
+  target_fps: 30
+  expected_width: 1280
+  expected_height: 720
+
+# Player target selection (src/detection/target_selector.py). Turns the raw
+# per-frame track list into the players we feed to pose + temporal, with
+# safeguards against locking onto spectators / people closer to the camera.
+# Maps 1:1 onto SelectionConfig; omitted keys fall back to that dataclass.
+detection:
+  target_selection:
+    # Singles with both ends covered -> keep the two best players.
+    max_targets: 2
+
+    # (2) Confidence gate: drop detections below this before ranking.
+    # 0.0 disables. 0.5 is a reasonable YOLO person floor; raise if spectators
+    # still slip through, lower if a real player flickers out.
+    min_confidence: 0.5
+
+    # (3) Geometry sanity: reject boxes with an implausible size / shape for a
+    # standing player (footage is 1280x720). Heights in pixels; aspect is
+    # height / width. null disables a given check.
+    #   - a standing player's box is clearly taller than wide (aspect >= ~1.2;
+    #     ready/lunge stances widen it, so we stay permissive on the low side)
+    #   - and occupies a sane vertical slice (not a tiny distant blob, not the
+    #     whole frame). Tune min_bbox_height against your own far-court player.
+    min_bbox_height: 120      # px
+    max_bbox_height: 720      # px (full frame; effectively no upper reject yet)
+    min_aspect_ratio: 1.2     # height / width
+    max_aspect_ratio: null    # arms-raised poses can be very tall; leave open
+
+    # (4) Court ROI polygon (image coords) + stickiness are future work, wired
+    # once Person 3's court detection lands and ID assignment is understood.
+    # court_polygon: null
+
+pose:
+  num_keypoints: 17        # Cropped MediaPipe keypoint layout
+  # Keypoints are normalized relative to the player bbox (0-1), matching schema.
+  normalize: bbox
+
+annotation:
+  # Fine-grained labels we assign. Mirror of SHOT_LABELS + STRUCTURAL_LABELS in
+  # src/temporal/schema.py (kept here for annotator reference / tooling config).
+  # The five phase classes annotators assign directly (mirror of PHASES in
+  # src/temporal/schema.py). These are first-class training labels.
+  labels:
+    - ready
+    - movement
+    - stroke
+    - recovery
+    - idle
+    # Sentinel: frames deliberately excluded from training (close-ups, cuts,
+    # bad tracking). NOT a phase the model predicts; windows containing it are
+    # dropped. See schema.IGNORE_LABEL.
+    - ignore
+  # Unified annotation record format produced by the tagger and the
+  # existing-tool (Label Studio / CVAT) import adapter.
+  record_format: jsonl
+
+# Projection from annotation labels to phases. With phases annotated directly it
+# is the identity; the hook remains so a FUTURE fine-grained vocabulary (stroke
+# types) can project down to these phases via config without code changes.
+projection:
+  active: identity
+  identity:
+    ready: ready
+    movement: movement
+    stroke: stroke
+    recovery: recovery
+    idle: idle
+
+# Future-work knobs (documented, not used by the POC):
+#   window_size / stride : temporal windowing for a pose-sequence classifier
+#   bfmd_import          : optional external pretraining data path
+future_work:
+  window_size: 30
+  stride: 5
+  bfmd_import: false

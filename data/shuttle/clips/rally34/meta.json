@@ -1,0 +1,20 @@
+{
+  "video": "C:\\Users\\dheva\\Documents\\SIT\\Y2T1\\CVDL\\Project\\RallyMirror\\rally33-40\\videos\\rally34.mp4",
+  "source_group": "match11",
+  "split": "train",
+  "fps": 30.0,
+  "original_width": 1920,
+  "original_height": 1080,
+  "start_frame": 0,
+  "frame_count": 400,
+  "transform": {
+    "width": 960,
+    "height": 544,
+    "resized_width": 960,
+    "resized_height": 540,
+    "scale_x": 0.5,
+    "scale_y": 0.5,
+    "pad_x": 0,
+    "pad_y": 2
+  }
+}

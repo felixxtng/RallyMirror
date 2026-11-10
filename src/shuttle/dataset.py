@@ -83,20 +83,60 @@ def frame_path(clip, frame):
     return Path(clip) / "frames" / f"{frame:06d}.jpg"
 
 
+def read_split_manifest(path):
+    """Validate declared group/block separation, including reserved test rows."""
+    assignments, groups, blocks = {}, {}, {}
+    with Path(path).open(newline="") as file:
+        for row in csv.DictReader(file):
+            name, group, split = (row[k].strip() for k in ("rally_id", "source_group", "proposed_split"))
+            if not name or Path(name).name != name or "\\" in name or name in (".", ".."):
+                raise ValueError("Invalid rally ID in split manifest")
+            if name in assignments or not group or split not in ("train", "val", "test"):
+                raise ValueError("Duplicate rally, invalid group or split in manifest")
+            if row.get("status", "").startswith("reserved_candidate_test") and split != "test":
+                raise ValueError(f"Reserved candidate test rally {name} was reassigned")
+            block = row.get("leakage_block", group) or group
+            if groups.setdefault(group, split) != split or blocks.setdefault(block, split) != split:
+                raise ValueError("Source group or leakage block appears in multiple splits")
+            assignments[name] = dict(row, source_group=group, proposed_split=split, leakage_block=block)
+    if not assignments:
+        raise ValueError("Empty split manifest")
+    return assignments
+
+
 class ShuttleDataset(Dataset):
-    def __init__(self, root, split, augment=False, radius=3):
+    def __init__(self, root, split, augment=False, radius=3, split_manifest=None):
         self.samples = []
         self.clips = []
         self.groups = set()
         self.dimensions = set()
         self.augment = augment
         self.radius = radius
+        assignments = read_split_manifest(split_manifest) if split_manifest is not None else None
+        if assignments is not None:
+            for name, row in assignments.items():
+                if row["proposed_split"] == split and not (Path(root) / name / "meta.json").is_file():
+                    raise FileNotFoundError(f"Manifest {split} clip is missing: {Path(root) / name}")
         for path in sorted(Path(root).glob("*/meta.json")):
+            assignment = assignments.get(path.parent.name) if assignments is not None else None
+            if assignments is not None and (assignment is None or assignment["proposed_split"] != split):
+                continue  # Includes every reserved test rally and unlisted auxiliary clip.
             meta = json.loads(path.read_text())
-            if meta["split"] != split:
+            if assignments is None and meta["split"] != split:
                 continue
+            if assignment is not None and assignment["source_group"] != meta["source_group"]:
+                raise ValueError(f"{path}: source group differs from split manifest")
             clip = path.parent
+            if not (clip / "frames").is_dir():
+                raise FileNotFoundError(f"Missing prepared frames directory: {clip}")
             labels = read_labels(clip / "labels.csv")
+            if assignment is not None:
+                if set(labels) != set(range(meta["frame_count"])):
+                    raise ValueError(f"{clip}: label frame range disagrees with metadata")
+                for column, actual in (("labelled_frames", sum(r["visible"] is not None for r in labels.values())),
+                                       ("unknown_labels", sum(r["visible"] is None for r in labels.values()))):
+                    if column in assignment and int(assignment[column]) != actual:
+                        raise ValueError(f"{clip}: {column} differs from split manifest")
             labelled = [row for row in labels.values() if row["visible"] is not None]
             if not labelled:
                 continue

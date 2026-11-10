@@ -12,6 +12,7 @@ import torch
 from .dataset import letterbox, letterbox_transform, stack_frames, to_original_point
 from .model import ShuttleNet
 from .train import choose_device
+from .tracker import TemporalTracker, TrackerConfig
 
 
 class ShuttleDetector:
@@ -24,43 +25,64 @@ class ShuttleDetector:
         self.model.to(self.device).eval()
         self.threshold = threshold
 
-    @torch.inference_mode()
     def predict(self, previous, current, following):
-        """Return original-image coordinates or None; always search the full frame."""
+        """Compatible highest-confidence detection (x, y, score), or None."""
+        candidates = self.predict_candidates(previous, current, following)
+        return {k: candidates[0][k] for k in ("x", "y", "score")} if candidates else None
+
+    @torch.inference_mode()
+    def predict_candidates(self, previous, current, following):
+        """All components, confidence sorted; area is measured in heatmap pixels."""
         height, width = current.shape[:2]
         t = letterbox_transform(width, height, self.width, self.height)
         frames = [letterbox(frame, t) for frame in [previous, current, following]]
         tensor = stack_frames(frames).unsqueeze(0).to(self.device)
         heatmap = self.model(tensor).sigmoid()[0, 0].cpu().numpy()
-        # Padding is not an observable part of the video.
-        allowed = np.zeros_like(heatmap, dtype=bool)
-        x, y = t["pad_x"], t["pad_y"]
-        allowed[y:y + t["resized_height"], x:x + t["resized_width"]] = True
-        binary = ((heatmap >= self.threshold) & allowed).astype(np.uint8)
-        count, components, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
-        best = None
-        for component in range(1, count):
-            if stats[component, cv2.CC_STAT_AREA] < 3:
-                continue
-            mask = components == component
-            score = float(heatmap[mask].max())
-            if best is None or score > best["score"]:
-                ys, xs = np.nonzero(mask)
-                weights = heatmap[mask]
-                hx = float(np.average(xs, weights=weights))
-                hy = float(np.average(ys, weights=weights))
-                ox, oy = to_original_point(hx, hy, t)
-                best = {"x": round(min(width - 1, max(0, ox)), 2),
-                        "y": round(min(height - 1, max(0, oy)), 2), "score": score}
-        return best
+        return extract_candidates(heatmap, t, width, height, self.threshold)
 
 
-def run_demo(video_path, weights, output_dir, threshold=0.5, device="auto"):
+def extract_candidates(heatmap, t, width, height, threshold=0.5):
+    """Exclude padding and tiny components; preserve weighted-centroid convention."""
+    allowed = np.zeros_like(heatmap, dtype=bool)
+    x, y = t["pad_x"], t["pad_y"]
+    allowed[y:y+t["resized_height"], x:x+t["resized_width"]] = True
+    binary = ((heatmap >= threshold) & allowed).astype(np.uint8)
+    count, components, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    candidates = []
+    for component in range(1, count):
+        area = int(stats[component, cv2.CC_STAT_AREA])
+        if area < 3:
+            continue
+        mask = components == component
+        ys, xs = np.nonzero(mask)
+        values = heatmap[mask]
+        ox, oy = to_original_point(float(np.average(xs, weights=values)),
+                                   float(np.average(ys, weights=values)), t)
+        candidates.append({"x": round(min(width-1, max(0, ox)), 2),
+                           "y": round(min(height-1, max(0, oy)), 2),
+                           "score": float(values.max()), "area": area})
+    return sorted(candidates, key=lambda candidate: candidate["score"], reverse=True)
+
+
+def run_demo(video_path, weights, output_dir, threshold=0.5, device="auto",
+             temporal_filter=False, tracker_config=None, offline_refine=False,
+             offline_config=None, candidate_cache=None, comparison_video=False):
+    if temporal_filter and offline_refine:
+        raise ValueError("Choose temporal filtering or offline refinement")
+    if (candidate_cache or comparison_video or offline_config is not None) and not offline_refine:
+        raise ValueError("Offline options require --offline-refine")
+    if offline_refine:
+        if tracker_config is not None:
+            raise ValueError("Use offline_config for offline refinement")
+        from .offline_demo import run_offline_demo
+        return run_offline_demo(video_path, weights, output_dir, threshold, device,
+                                offline_config, candidate_cache, comparison_video)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_video = output_dir / "shuttle_demo.mp4"
     output_data = output_dir / "shuttle_tracking.jsonl"
-    if output_video.exists() or output_data.exists():
+    metadata_path = output_dir / "shuttle_metadata.json"
+    if output_video.exists() or output_data.exists() or metadata_path.exists():
         raise FileExistsError("Choose a fresh output directory to avoid replacing an earlier result")
     video = cv2.VideoCapture(str(video_path))
     if not video.isOpened():
@@ -74,6 +96,15 @@ def run_demo(video_path, weights, output_dir, threshold=0.5, device="auto"):
             raise ValueError("Video is empty or has invalid FPS")
         detector = ShuttleDetector(weights, threshold, device)
         height, width = current.shape[:2]
+        tracker = TemporalTracker(width, height, fps, tracker_config) if temporal_filter else None
+        metadata = {"video": str(Path(video_path).resolve()), "width": width, "height": height,
+                    "fps": fps, "frame_count": int(video.get(cv2.CAP_PROP_FRAME_COUNT)),
+                    "frame_origin": 0, "coordinate_system": "original_pixels",
+                    "temporal_filter": temporal_filter}
+        if tracker:
+            from dataclasses import asdict
+            metadata["tracker_config"] = asdict(tracker.config)
+        metadata_path.write_text(json.dumps(metadata, indent=2))
         writer = cv2.VideoWriter(str(output_video), cv2.VideoWriter_fourcc(*"mp4v"),
                                  fps, (width, height))
         if not writer.isOpened():
@@ -84,10 +115,17 @@ def run_demo(video_path, weights, output_dir, threshold=0.5, device="auto"):
         frame_number = 0
         with output_data.open("w") as file:
             while True:
-                detection = detector.predict(previous, current, following if has_next else current)
+                if tracker:
+                    candidates = detector.predict_candidates(previous, current, following if has_next else current)
+                    raw = {k: candidates[0][k] for k in ("x", "y", "score")} if candidates else None
+                    detection = tracker.update(candidates, frame_number)
+                else:
+                    detection = detector.predict(previous, current, following if has_next else current)
                 status = "detected" if detection is not None else "missing"
                 row = {"frame": frame_number, "time_seconds": frame_number / fps,
                        "status": status, "x": None, "y": None, "score": None}
+                if tracker:
+                    row.update(raw_detection=raw, candidates=candidates, tracking_reason=tracker.reason)
                 if detection is not None:
                     row.update(detection)
                     point = (round(detection["x"]), round(detection["y"]))
@@ -127,10 +165,28 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("outputs/shuttle_demo"))
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--device", choices=["auto", "cpu", "mps", "cuda"], default="auto")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--temporal-filter", action="store_true")
+    mode.add_argument("--offline-refine", action="store_true")
+    parser.add_argument("--offline-config", type=Path, help="JSON overrides for OfflineConfig defaults")
+    parser.add_argument("--candidate-cache", type=Path,
+                        help="Offline only: reuse all candidates from JSONL with metadata; skips model inference")
+    parser.add_argument("--comparison-video", action="store_true",
+                        help="Offline only: also render original/temporal/offline panels")
+    parser.add_argument("--tracker-config", type=Path, help="JSON overrides for TrackerConfig defaults")
     args = parser.parse_args()
     if not 0 < args.threshold < 1:
         parser.error("threshold must be between 0 and 1")
-    run_demo(args.video, args.weights, args.output, args.threshold, args.device)
+    config = TrackerConfig(**json.loads(args.tracker_config.read_text())) if args.tracker_config else None
+    from .offline_tracker import OfflineConfig
+    offline_config = OfflineConfig(**json.loads(args.offline_config.read_text())) if args.offline_config else None
+    if (args.candidate_cache or args.comparison_video or offline_config is not None) and not args.offline_refine:
+        parser.error("Offline options require --offline-refine")
+    if args.offline_refine and config is not None:
+        parser.error("--tracker-config applies to temporal mode; use --offline-config")
+    run_demo(args.video, args.weights, args.output, args.threshold, args.device,
+             args.temporal_filter, config, args.offline_refine, offline_config,
+             args.candidate_cache, args.comparison_video)
 
 
 if __name__ == "__main__":

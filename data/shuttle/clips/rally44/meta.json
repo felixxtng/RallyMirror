@@ -1,0 +1,20 @@
+{
+  "video": "C:\\Users\\moham\\School\\Year 2 Tri 1\\AAI3001-Computer Vision\\CodeAssignment\\RallyMirror\\data\\shuttle\\videos\\Match 13\\rally44.mp4",
+  "source_group": "match13",
+  "split": "train",
+  "fps": 30.0,
+  "original_width": 1918,
+  "original_height": 1058,
+  "start_frame": 0,
+  "frame_count": 769,
+  "transform": {
+    "width": 960,
+    "height": 544,
+    "resized_width": 960,
+    "resized_height": 530,
+    "scale_x": 0.5005213764337852,
+    "scale_y": 0.500945179584121,
+    "pad_x": 0,
+    "pad_y": 7
+  }
+}

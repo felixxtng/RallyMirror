@@ -1,0 +1,20 @@
+{
+  "video": "C:\\Users\\cheet\\Desktop\\SIT\\Course\\2026-2027\\T1\\AAI3001 - Computer Vision & Deep Learning\\Project\\RallyMirror\\data\\shuttle\\videos\\match10\\rally32.mp4",
+  "source_group": "match10",
+  "split": "train",
+  "fps": 30.0,
+  "original_width": 2180,
+  "original_height": 1194,
+  "start_frame": 0,
+  "frame_count": 1445,
+  "transform": {
+    "width": 960,
+    "height": 544,
+    "resized_width": 960,
+    "resized_height": 526,
+    "scale_x": 0.44036697247706424,
+    "scale_y": 0.440536013400335,
+    "pad_x": 0,
+    "pad_y": 9
+  }
+}

@@ -107,7 +107,7 @@ class Labeler:
         try:
             while True:
                 cv2.imshow(self.window, self.draw())
-                key = cv2.waitKey(30) & 0xFF
+                key = cv2.waitKey(100) & 0xFF
                 if key in (ord("q"), 27) or cv2.getWindowProperty(self.window, cv2.WND_PROP_VISIBLE) < 1:
                     break
                 if key == ord("a"):

@@ -23,3 +23,5 @@ data/shuttle/clips/*/*
 !data/shuttle/clips/*/labels.csv
 !data/shuttle/clips/*/meta.json
 !data/shuttle/README.md
+!data/shuttle/dataset_manifest.csv
+!data/shuttle/split_manifest.csv

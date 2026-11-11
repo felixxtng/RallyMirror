@@ -15,7 +15,7 @@ from src.temporal.contracts import load_pose_jsonl
 
 clip_id = sys.argv[1] if len(sys.argv) > 1 else "rally47"
 anno_path = f"data/annotations/{clip_id}.jsonl"
-pose_path = f"data/clips/{clip_id}/pose.jsonl"
+pose_path = f"data/shuttle/clips/{clip_id}/pose.jsonl"
 
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):

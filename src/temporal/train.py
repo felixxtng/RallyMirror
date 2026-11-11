@@ -22,7 +22,7 @@ Design choices for the small-data regime (~15 clips):
 Run::
 
     .\\.venv\\Scripts\\python.exe -m src.temporal.train \\
-        --annotations data/annotations --clips data/clips \\
+        --annotations data/annotations --clips data/shuttle/clips \\
         --window-size 30 --epochs 60
 
 torch is imported lazily so importing this module (e.g. for the data-assembly
@@ -284,7 +284,7 @@ def format_report(cm) -> str:
 
 def train(
     annotations_dir: str = "data/annotations",
-    clips_dir: str = "data/clips",
+    clips_dir: str = "data/shuttle/clips",
     window_size: int = 30,
     stride: int = 1,
     label_from: str = "last",
@@ -409,7 +409,7 @@ def format_cv_report(fold_cms: List[List[List[int]]]) -> str:
 
 def cross_validate(
     annotations_dir: str = "data/annotations",
-    clips_dir: str = "data/clips",
+    clips_dir: str = "data/shuttle/clips",
     k: int = 5,
     window_size: int = 30,
     stride: int = 1,
@@ -581,7 +581,7 @@ def _fit_and_evaluate(
 def main(argv: Optional[List[str]] = None) -> None:
     p = argparse.ArgumentParser(description="Train the TCN phase classifier")
     p.add_argument("--annotations", default="data/annotations")
-    p.add_argument("--clips", default="data/clips")
+    p.add_argument("--clips", default="data/shuttle/clips")
     p.add_argument("--window-size", type=int, default=30)
     p.add_argument("--stride", type=int, default=1)
     p.add_argument("--label-from", default="last", choices=["last", "center", "majority"])

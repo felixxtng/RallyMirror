@@ -20,7 +20,7 @@ print(f'{"clip":12} {"raw":>6} {"valid":>6} {"rate":>6}')
 print("-" * 34)
 rows = []
 for cid in anno_ids:
-    path = f"data/clips/{cid}/pose.jsonl"
+    path = f"data/shuttle/clips/{cid}/pose.jsonl"
     if not os.path.exists(path):
         print(f'{cid:12} {"MISSING":>6}')
         continue

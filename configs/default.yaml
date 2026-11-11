@@ -12,7 +12,7 @@ project:
 
 paths:
   # Raw self-sourced clips land here; intake organizes them into dataset/.
-  raw_clips: data/sample
+  raw_clips: data/videos
   # Curated dataset root (manifest, poses, annotations, labeled dataset).
   dataset_root: data/dataset
   # Demo + intermediate artifacts.
@@ -55,6 +55,13 @@ detection:
     # (4) Court ROI polygon (image coords) + stickiness are future work, wired
     # once Person 3's court detection lands and ID assignment is understood.
     # court_polygon: null
+
+# Court-space mapping settings (read by src/court/mapper.py; missing keys use defaults).
+court:
+  foot_min_visibility: 0.5       # ankle keypoint must exceed this visibility/presence
+  bounds_margin_m: 1.0           # in_bounds=True if within this many metres of the court
+  smoothing_window: 5            # rolling-median window (frames) for court_xy
+  smoothing_max_gap_frames: 15   # history is cleared after a gap longer than this
 
 pose:
   num_keypoints: 17        # Cropped MediaPipe keypoint layout

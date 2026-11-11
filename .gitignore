@@ -25,3 +25,8 @@ data/shuttle/clips/*/*
 !data/shuttle/README.md
 !data/shuttle/dataset_manifest.csv
 !data/shuttle/split_manifest.csv
+
+# Court module outputs
+dataset/
+runs/
+calibration_pred/

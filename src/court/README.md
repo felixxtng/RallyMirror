@@ -10,8 +10,8 @@ Turns a tracked player's foot pixel into (x, y) metres on a BWF court.
 
 ## B. Learned court detector (trained from scratch)
 Name labelled files `<venue>_<number>` (venueA_01 ...). B0 must ALWAYS be the end nearest the camera.
-1. `python -m src.court.export_dataset`        calibration/*.json -> dataset/court (split BY VENUE)
-2. `python -m src.court.train --epochs 60`     -> checkpoints/court_net.pt  (use a GPU if you can)
+1. `python -m src.court.export_dataset`        data/calibration/*.json -> data/dataset/court (split BY VENUE)
+2. `python -m src.court.train --epochs 60`     -> outputs/court_net.pt  (use a GPU if you can)
 3. `python -m src.court.evaluate`              test-venue pixel/metre error + overlays in outputs/court_eval
 4. `python -m src.court.predict image.jpg`     model -> calibration_pred/<name>.json (+ overlay)
    Videos: `--frames 15` takes the median over frames (FIXED camera only).

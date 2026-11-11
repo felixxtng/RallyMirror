@@ -1,13 +1,13 @@
 """Turn your saved calibrations into a labelled dataset for training.
 
-    python -m src.court.export_dataset --calibration-dir calibration --out dataset/court
+    python -m src.court.export_dataset --calibration-dir data/calibration --out data/dataset/court
 
 For every calibration/<name>.json it:
   1. loads the labelled image (or video frame),
   2. projects ALL court points in --points into that image using the saved homography
      (so points you did not click are filled in), marking points outside the frame as
      not visible,
-  3. saves the image and writes dataset/court/labels.json.
+  3. saves the image and writes data/dataset/court/labels.json.
 
 Name your files "<venue>_<number>" (venueA_01, venueB_03 ...). The text before the first
 underscore is the venue, and the train/val/test split is made BY VENUE so the test
@@ -179,8 +179,8 @@ def export(calibration_dir, out_dir, names, val_venues, test_venues, media_dir, 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Export calibrations to a training dataset")
-    parser.add_argument("--calibration-dir", default="calibration")
-    parser.add_argument("--out", default="dataset/court")
+    parser.add_argument("--calibration-dir", default="data/calibration")
+    parser.add_argument("--out", default="data/dataset/court")
     parser.add_argument("--points", help="comma-separated point names (default: the 12-point list)")
     parser.add_argument("--val-venues", help="comma-separated venues used for validation")
     parser.add_argument("--test-venues", help="comma-separated venues used for testing")

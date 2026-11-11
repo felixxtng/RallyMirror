@@ -1,6 +1,6 @@
 """Test the trained model on held-out images and compare with your manual calibrations.
 
-    python -m src.court.evaluate --dataset dataset/court --checkpoint checkpoints/court_net.pt
+    python -m src.court.evaluate --dataset data/dataset/court --checkpoint outputs/court_net.pt
 
 For each image of the chosen split it reports
   * point error: pixels between predicted and clicked points (as % of image width),
@@ -30,8 +30,8 @@ def _mean_of(rows, key):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate the court model")
-    parser.add_argument("--dataset", default="dataset/court")
-    parser.add_argument("--checkpoint", default="checkpoints/court_net.pt")
+    parser.add_argument("--dataset", default="data/dataset/court")
+    parser.add_argument("--checkpoint", default="outputs/court_net.pt")
     parser.add_argument("--split", default="test")
     parser.add_argument("--conf", type=float, default=0.3)
     parser.add_argument("--success-m", type=float, default=0.3,

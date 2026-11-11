@@ -1,6 +1,6 @@
 """Use a trained CourtNet: image/video -> court points -> calibration JSON.
 
-    python -m src.court.predict data/court_labelling/venueC_01.jpg --checkpoint checkpoints/court_net.pt
+    python -m src.court.predict data/court_labelling/venueC_01.jpg --checkpoint outputs/court_net.pt
     python -m src.court.predict data/sample/clip.mp4 --frames 15        # FIXED camera only
 
 Writes calibration_pred/<name>.json (same format as the click tool, so
@@ -52,7 +52,7 @@ def draw_prediction(image, calib, names, points, conf, conf_thresh=0.3):
 def main():
     parser = argparse.ArgumentParser(description="Predict a court calibration with the trained model")
     parser.add_argument("media", help="image or video")
-    parser.add_argument("--checkpoint", default="checkpoints/court_net.pt")
+    parser.add_argument("--checkpoint", default="outputs/court_net.pt")
     parser.add_argument("--frames", type=int, default=1,
                         help="videos: number of frames to sample; the per-point median is used "
                              "(only valid if the camera does not move)")

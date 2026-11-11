@@ -12,7 +12,7 @@ project:
 
 paths:
   # Raw self-sourced clips land here; intake organizes them into dataset/.
-  raw_clips: data/videos
+  raw_clips: data/sample
   # Curated dataset root (manifest, poses, annotations, labeled dataset).
   dataset_root: data/dataset
   # Demo + intermediate artifacts.

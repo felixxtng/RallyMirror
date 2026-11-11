@@ -1,6 +1,6 @@
 """Train CourtNet from scratch on the exported dataset.
 
-    python -m src.court.train --dataset dataset/court --out checkpoints/court_net.pt
+    python -m src.court.train --dataset data/dataset/court --out outputs/court_net.pt
 
 Watch two numbers: the training loss (should fall steadily) and the validation pixel
 error on a venue the model never trained on (this is what tells you if it works).
@@ -42,8 +42,8 @@ def validation_errors(model, dataset, device, conf_thresh=0.3):
 
 def main():
     parser = argparse.ArgumentParser(description="Train the court keypoint network from scratch")
-    parser.add_argument("--dataset", default="dataset/court")
-    parser.add_argument("--out", default="checkpoints/court_net.pt")
+    parser.add_argument("--dataset", default="data/dataset/court")
+    parser.add_argument("--out", default="outputs/court_net.pt")
     parser.add_argument("--epochs", type=int, default=150)
     parser.add_argument("--repeat", type=int, default=10,
                         help="augmented passes over the training set per epoch (small data)")

@@ -12,6 +12,10 @@ outputs/*
 *.pt
 *.pth
 
+# Local source videos and extracted rally data are shared separately.
+/training videos/
+/test_court*.mp4
+
 # Shuttle annotations; videos and extracted frames stay excluded
 !data/shuttle/
 data/shuttle/*

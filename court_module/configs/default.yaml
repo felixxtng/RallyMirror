@@ -1,0 +1,6 @@
+# Court-space mapping settings (read by src/court/mapper.py; missing keys use defaults).
+court:
+  foot_min_visibility: 0.5       # ankle keypoint must exceed this visibility/presence
+  bounds_margin_m: 1.0           # in_bounds=True if within this many metres of the court
+  smoothing_window: 5            # rolling-median window (frames) for court_xy
+  smoothing_max_gap_frames: 15   # history is cleared after a gap longer than this

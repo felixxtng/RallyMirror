@@ -1,0 +1,8 @@
+outputs/
+archive/
+data/images/
+incoming/images/
+data_courts17/images/
+data_test_court/images/
+dataset/images/
+archive/**/images/

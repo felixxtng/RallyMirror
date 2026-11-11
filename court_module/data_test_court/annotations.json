@@ -1,0 +1,122 @@
+{
+  "version": 2,
+  "point_names": [
+    "DL-B0",
+    "DR-B0",
+    "DL-B1",
+    "DR-B1",
+    "DL-SS0",
+    "DR-SS0",
+    "DL-SS1",
+    "DR-SS1",
+    "NL-TOP",
+    "NR-TOP",
+    "C-SS0",
+    "C-SS1"
+  ],
+  "images": [
+    {
+      "id": "test_recording01/test_court_ed8097921d",
+      "image": "images/test_recording01/test_court_ed8097921d.jpg",
+      "source": "C:\\Users\\dheva\\Documents\\SIT\\Y2T1\\CVDL\\Project\\RallyMirror\\test_court.mp4",
+      "frame": 29,
+      "width": 1942,
+      "height": 1092,
+      "image_hash": "13d76967821747637885823a8358c1db70ab85a11d8bfa57cdb99bce5eada09a",
+      "group": "test_recording01",
+      "court_id": "unverified_sydney_test",
+      "view_id": "test_sydney_view01",
+      "split": "test",
+      "unusable": false,
+      "points": {
+        "DL-B0": {
+          "status": "visible",
+          "xy": [
+            459.2,
+            1019.2
+          ]
+        },
+        "DR-B0": {
+          "status": "visible",
+          "xy": [
+            1482.8,
+            1013.13
+          ]
+        },
+        "DL-B1": {
+          "status": "visible",
+          "xy": [
+            635.2,
+            467.13
+          ]
+        },
+        "DR-B1": {
+          "status": "visible",
+          "xy": [
+            1304.78,
+            465.11
+          ]
+        },
+        "DL-SS0": {
+          "status": "visible",
+          "xy": [
+            540.12,
+            766.42
+          ]
+        },
+        "DR-SS0": {
+          "status": "visible",
+          "xy": [
+            1401.88,
+            764.4
+          ]
+        },
+        "DL-SS1": {
+          "status": "visible",
+          "xy": [
+            590.69,
+            608.69
+          ]
+        },
+        "DR-SS1": {
+          "status": "visible",
+          "xy": [
+            1351.31,
+            606.67
+          ]
+        },
+        "NL-TOP": {
+          "status": "visible",
+          "xy": [
+            566.42,
+            487.36
+          ]
+        },
+        "NR-TOP": {
+          "status": "visible",
+          "xy": [
+            1377.61,
+            483.31
+          ]
+        },
+        "C-SS0": {
+          "status": "visible",
+          "xy": [
+            971.0,
+            766.42
+          ]
+        },
+        "C-SS1": {
+          "status": "visible",
+          "xy": [
+            971.0,
+            606.67
+          ]
+        }
+      },
+      "court_identity_status": "potential_overlap_with_training_view15",
+      "evaluation_scope": "point_accuracy_on_new_video_frame_only_not_verified_unseen_court",
+      "prediction_reference": "court_module/outputs/test_court_frame000029/points.json"
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "source": "archive/data_courts17",
+  "images": [
+    {
+      "id": "reviewed_training_collection/rally02_d3a397f928",
+      "original_image": "images/reviewed_training_collection/rally02_d3a397f928.jpg",
+      "image": "images/court_001.jpg",
+      "file_sha256": "e49d5fc42365c99dc67374ca3cc26bf8b5b43df72c442698874a6645da6585e6"
+    },
+    {
+      "id": "reviewed_training_collection/rally05_e334d73c72",
+      "original_image": "images/reviewed_training_collection/rally05_e334d73c72.jpg",
+      "image": "images/court_002.jpg",
+      "file_sha256": "757ca6c5c141033a10b89ed3781b7d95626660401784c2aab931e40e98a5c56f"
+    },
+    {
+      "id": "reviewed_training_collection/rally09_07f2cf8b60",
+      "original_image": "images/reviewed_training_collection/rally09_07f2cf8b60.jpg",
+      "image": "images/court_003.jpg",
+      "file_sha256": "378b6fbbba8a9661243fb9e83920858b71c427fb80d69365efbc06d88f381d9a"
+    },
+    {
+      "id": "reviewed_training_collection/rally11_7233382cb2",
+      "original_image": "images/reviewed_training_collection/rally11_7233382cb2.jpg",
+      "image": "images/court_004.jpg",
+      "file_sha256": "d4f16c10b535f781f4fb8bb3897ab94ac3b6a547db311af0d5fb6e087eab0df9"
+    },
+    {
+      "id": "reviewed_training_collection/rally14_9a83ff3fcf",
+      "original_image": "images/reviewed_training_collection/rally14_9a83ff3fcf.jpg",
+      "image": "images/court_005.jpg",
+      "file_sha256": "c5cfbc6e7406224749fb4468b3eef3a30ffc020dbcbb203ff3c6122583ffd186"
+    },
+    {
+      "id": "reviewed_training_collection/rally19_ce24993fb9",
+      "original_image": "images/reviewed_training_collection/rally19_ce24993fb9.jpg",
+      "image": "images/court_006.jpg",
+      "file_sha256": "79b369d4a404c2cbcde38cb0a2313aa05d6dd436df0cc96f88361deb2f736b81"
+    },
+    {
+      "id": "reviewed_training_collection/rally22_40b243f7e2",
+      "original_image": "images/reviewed_training_collection/rally22_40b243f7e2.jpg",
+      "image": "images/court_007.jpg",
+      "file_sha256": "1543d5407b2752797eb66c4a95a7d434884af290c9e655500cb932207016665d"
+    },
+    {
+      "id": "reviewed_training_collection/rally25_98c1412afb",
+      "original_image": "images/reviewed_training_collection/rally25_98c1412afb.jpg",
+      "image": "images/court_008.jpg",
+      "file_sha256": "1cf15f776bd0b74be0a7de78c20c877e8db50300fb943db2950de38913834bdb"
+    },
+    {
+      "id": "reviewed_training_collection/rally26_deb50fd245",
+      "original_image": "images/reviewed_training_collection/rally26_deb50fd245.jpg",
+      "image": "images/court_009.jpg",
+      "file_sha256": "19a130ae38e0d965d12603c2b0fac9915cc4e856c86a5f565817b66df28bdeab"
+    },
+    {
+      "id": "reviewed_training_collection/rally27_c93790f28e",
+      "original_image": "images/reviewed_training_collection/rally27_c93790f28e.jpg",
+      "image": "images/court_010.jpg",
+      "file_sha256": "2cba6835c0b1bd50eb2d8560de4ecc41dff3af411d1481280ea515887d8b0028"
+    },
+    {
+      "id": "reviewed_training_collection/rally28_62500afa3e",
+      "original_image": "images/reviewed_training_collection/rally28_62500afa3e.jpg",
+      "image": "images/court_011.jpg",
+      "file_sha256": "5800b7423c753c4f96f217171f7b6d752ef4b312891fe89168382d589411d57d"
+    },
+    {
+      "id": "reviewed_training_collection/rally29_9552c1eb15",
+      "original_image": "images/reviewed_training_collection/rally29_9552c1eb15.jpg",
+      "image": "images/court_012.jpg",
+      "file_sha256": "c366d3eaa40d0398c67ea90a6b7cb80d499b6f84ad20d049610cdb6c31bea6cb"
+    },
+    {
+      "id": "reviewed_training_collection/rally31_add9626072",
+      "original_image": "images/reviewed_training_collection/rally31_add9626072.jpg",
+      "image": "images/court_013.jpg",
+      "file_sha256": "08e40730eaad87e2652a29901d0446ae3089b8d8eb3118edfbc2b1c9a66ac791"
+    },
+    {
+      "id": "reviewed_training_collection/rally33_c5c4cec5e4",
+      "original_image": "images/reviewed_training_collection/rally33_c5c4cec5e4.jpg",
+      "image": "images/court_014.jpg",
+      "file_sha256": "0b8f5ff5cee1061ddaadf22e2fa0558345aa54c9711d30bf6731f4b76fe989d7"
+    },
+    {
+      "id": "reviewed_training_collection/rally37_1e240ca872",
+      "original_image": "images/reviewed_training_collection/rally37_1e240ca872.jpg",
+      "image": "images/court_015.jpg",
+      "file_sha256": "b5c3e89f2bc90c609ba24365bd494ec9c3ab7310947d1bdc01dbe07c73d9c160"
+    },
+    {
+      "id": "reviewed_training_collection/rally41_a37b5915ce",
+      "original_image": "images/reviewed_training_collection/rally41_a37b5915ce.jpg",
+      "image": "images/court_016.jpg",
+      "file_sha256": "07e00aeb197ba91ed73d62d6a75791a5cda9d25de905d6a25e82c1bc7a5a80b3"
+    },
+    {
+      "id": "reviewed_training_collection/rally45_1b68a933ad",
+      "original_image": "images/reviewed_training_collection/rally45_1b68a933ad.jpg",
+      "image": "images/court_017.jpg",
+      "file_sha256": "c2ca0bc35abefa3989bda9e31d1b0a056e3632abed557c2d6019e72137ae0402"
+    }
+  ],
+  "note": "17 original images and all manual labels preserved. Test reference labels not included."
+}

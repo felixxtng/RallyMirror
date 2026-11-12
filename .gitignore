@@ -11,6 +11,8 @@ outputs/*
 !outputs/.gitkeep
 *.pt
 *.pth
+!checkpoints/*.pt
+!checkpoints/*.pth
 
 # Shuttle annotations; videos and extracted frames stay excluded
 !data/shuttle/

@@ -57,7 +57,7 @@ def main():
                         help="videos: number of frames to sample; the per-point median is used "
                              "(only valid if the camera does not move)")
     parser.add_argument("--conf", type=float, default=0.3, help="minimum point confidence")
-    parser.add_argument("--out-dir", default="calibration_pred")
+    parser.add_argument("--out-dir", default="data/calibration_pred")
     parser.add_argument("--overlay-dir", default="outputs/court_pred")
     parser.add_argument("--device", default="auto")
     args = parser.parse_args()

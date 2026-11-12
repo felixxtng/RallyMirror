@@ -594,7 +594,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--patience", type=int, default=10)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--checkpoint", default="outputs/phase_tcn.pt")
+    p.add_argument("--checkpoint", default="models/phase_tcn.pt")
     p.add_argument("--device", default="cpu")
     p.add_argument("--no-velocity", dest="velocity", action="store_false",
                    help="use coordinates only (disable per-keypoint velocity)")

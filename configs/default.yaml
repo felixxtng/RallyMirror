@@ -68,6 +68,30 @@ pose:
   # Keypoints are normalized relative to the player bbox (0-1), matching schema.
   normalize: bbox
 
+  # Overlapping-player mitigations (src/pose/estimator.py). Top-down pose fills
+  # a crop with exactly one skeleton, so when two players' boxes overlap the
+  # model can lock onto the wrong body or merge both into one skeleton. These
+  # knobs reduce that. Maps onto OverlapConfig; omitted keys use its defaults.
+  overlap:
+    # (1) Mask the OTHER selected players out of this player's crop by painting
+    # their box regions a flat colour before pose runs, so the model has far
+    # less of the neighbour to latch onto. Only applied where boxes overlap.
+    mask_other_players: true
+
+    # (2) Adaptive crop padding. Base padding keeps hands/feet; when another
+    # player's box overlaps this one, padding is reduced toward the tight value
+    # so the crop stops bleeding into the neighbour. IoU 0 -> base, IoU >=
+    # shrink_at_iou -> tight, linearly interpolated between.
+    base_padding: 0.15
+    tight_padding: 0.0
+    shrink_at_iou: 0.15
+
+    # (3) Validate the returned skeleton against the player's OWN bbox: if the
+    # visible-keypoint centroid falls more than this fraction of the box size
+    # outside the box, reject the pose for that player this frame (keeps a
+    # wrong/merged skeleton out of the temporal JSONL). null disables.
+    validate_centroid_margin: 0.35
+
 annotation:
   # Fine-grained labels we assign. Mirror of SHOT_LABELS + STRUCTURAL_LABELS in
   # src/temporal/schema.py (kept here for annotator reference / tooling config).

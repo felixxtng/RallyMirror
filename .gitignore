@@ -13,7 +13,9 @@ outputs/*
 *.pth
 *.task
 
-# Shuttle annotations; videos and extracted frames stay excluded
+!models/*
+
+# Shuttle and court annotations; videos and extracted frames stay excluded
 !data/shuttle/
 data/shuttle/*
 !data/shuttle/clips/
@@ -25,6 +27,8 @@ data/shuttle/clips/*/*
 !data/shuttle/README.md
 !data/shuttle/dataset_manifest.csv
 !data/shuttle/split_manifest.csv
+
+!data/calibration
 
 # Court module outputs
 dataset/

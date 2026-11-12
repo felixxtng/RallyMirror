@@ -12,7 +12,6 @@ outputs/*
 *.pt
 *.pth
 *.task
-
 !models/*
 
 # Shuttle and court annotations; videos and extracted frames stay excluded

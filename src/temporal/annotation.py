@@ -200,6 +200,8 @@ def build_training_dataset(
     clip_id: str,
     projection: Optional[Dict[str, str]] = None,
     single_player: bool = True,
+    use_court: bool = False,
+    use_shuttle: bool = False,
 ) -> Tuple[List[List[float]], List[int]]:
     """Join annotations with a pose stream into ``(features, phase_indices)``.
 
@@ -242,7 +244,7 @@ def build_training_dataset(
         if label is None or schema.is_ignore(label):
             continue  # frame not annotated, or deliberately marked ignore
         phase = schema.project_label(label, projection)
-        X.append(pose_record_to_vector(rec))
+        X.append(pose_record_to_vector(rec, use_court=use_court, use_shuttle=use_shuttle))
         y.append(schema.PHASE_TO_INDEX[phase])
     return X, y
 
@@ -256,7 +258,10 @@ def build_windowed_training_dataset(
     label_from: str = "last",
     projection: Optional[Dict[str, str]] = None,
     single_player: bool = True,
-) -> Tuple[List[List[List[float]]], List[int]]:
+    use_court: bool = False,
+    use_shuttle: bool = False,
+    return_label_frames: bool = False,
+):
     """Join annotations with a pose stream into windowed training samples.
 
     Each sample ``X[i]`` is a ``window_size x FEATURE_LEN`` sequence of
@@ -318,6 +323,10 @@ def build_windowed_training_dataset(
 
     X: List[List[List[float]]] = []
     y: List[int] = []
+    # Per-window anchor frame (the frame the window's label/prediction is
+    # "about"), used only by timeline-based evaluation. Collected always; the
+    # value is returned only when ``return_label_frames`` is set.
+    label_frames: List[int] = []
 
     for stream_key, recs in streams.items():
         if single_player:
@@ -352,13 +361,21 @@ def build_windowed_training_dataset(
 
                 if label_from == "last":
                     chosen = labels[-1]
+                    anchor = window[-1]["frame"]
                 elif label_from == "center":
                     chosen = labels[window_size // 2]
+                    anchor = window[window_size // 2]["frame"]
                 else:  # majority
                     chosen = max(set(labels), key=labels.count)
+                    anchor = window[-1]["frame"]  # score at the current frame
 
                 phase = schema.project_label(chosen, projection)
-                X.append([pose_record_to_vector(r) for r in window])
+                X.append([pose_record_to_vector(r, use_court=use_court,
+                                                 use_shuttle=use_shuttle)
+                          for r in window])
                 y.append(schema.PHASE_TO_INDEX[phase])
+                label_frames.append(anchor)
 
+    if return_label_frames:
+        return X, y, label_frames
     return X, y

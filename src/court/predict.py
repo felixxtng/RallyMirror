@@ -39,6 +39,51 @@ def predict_points(model, image_bgr, device="cpu"):
     return apply_homography(invert(M), points_in[0]), conf[0]
 
 
+def predict_calibration(model, names, media, frames=1, conf=0.3, device="cpu"):
+    """Predict a court calibration for one image/video (no file I/O).
+
+    Samples ``frames`` evenly across a video (or the single image), runs the
+    detector, takes the per-point median of confident detections, and fits a
+    trustworthy calibration. Returns ``(calib, first_frame, points, conf_arr)``
+    where ``calib`` is the calibration dict (same format as the click tool) or
+    ``None`` if no trustworthy fit was found; ``info`` details go unused here.
+
+    This is the programmatic core of ``main``; the pipeline calls it directly so
+    it does not have to shell out to the CLI.
+    """
+    media = Path(media)
+    is_video = media.suffix.lower() not in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+    if is_video:
+        cap = cv2.VideoCapture(str(media))
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+        frame_ids = [int(i) for i in np.linspace(0, max(total - 1, 0), max(frames, 1))]
+    else:
+        frame_ids = [0]
+
+    all_points, all_conf, first = [], [], None
+    for frame_id in dict.fromkeys(frame_ids):
+        frame = grab_frame(media, frame_id)
+        first = frame if first is None else first
+        pts, cf = predict_points(model, frame, device)
+        all_points.append(pts)
+        all_conf.append(cf)
+    all_points, all_conf = np.array(all_points), np.array(all_conf)
+    points = np.zeros((len(names), 2))
+    conf_arr = np.zeros(len(names))
+    for k in range(len(names)):
+        good = all_conf[:, k] >= conf
+        if good.any():
+            points[k] = np.median(all_points[good, k], axis=0)
+            conf_arr[k] = np.median(all_conf[good, k])
+
+    height, width = first.shape[:2]
+    info = {}
+    calib = calibration_from_points(names, points, conf_arr, (width, height), conf,
+                                    video=str(media), info=info)
+    return calib, first, points, conf_arr, info
+
+
 def draw_prediction(image, calib, names, points, conf, conf_thresh=0.3):
     out = overlay_court(image.copy(), np.array(calib["H_image_to_court"]), (0, 0, 255), 2)
     for name, (x, y), c in zip(names, points, conf):
@@ -52,7 +97,7 @@ def draw_prediction(image, calib, names, points, conf, conf_thresh=0.3):
 def main():
     parser = argparse.ArgumentParser(description="Predict a court calibration with the trained model")
     parser.add_argument("media", help="image or video")
-    parser.add_argument("--checkpoint", default="outputs/court_net.pt")
+    parser.add_argument("--checkpoint", default="models/court_final.pt")
     parser.add_argument("--frames", type=int, default=1,
                         help="videos: number of frames to sample; the per-point median is used "
                              "(only valid if the camera does not move)")
@@ -65,34 +110,8 @@ def main():
     device = pick_device(args.device)
     model, names = load_checkpoint(args.checkpoint, device)
     media = Path(args.media)
-    is_video = media.suffix.lower() not in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-    if is_video:
-        cap = cv2.VideoCapture(str(media))
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        cap.release()
-        frame_ids = [int(i) for i in np.linspace(0, max(total - 1, 0), max(args.frames, 1))]
-    else:
-        frame_ids = [0]
-
-    all_points, all_conf, first = [], [], None
-    for frame_id in dict.fromkeys(frame_ids):
-        frame = grab_frame(media, frame_id)
-        first = frame if first is None else first
-        points, conf = predict_points(model, frame, device)
-        all_points.append(points)
-        all_conf.append(conf)
-    all_points, all_conf = np.array(all_points), np.array(all_conf)
-    points = np.zeros((len(names), 2))
-    conf = np.zeros(len(names))
-    for k in range(len(names)):
-        good = all_conf[:, k] >= args.conf
-        if good.any():
-            points[k], conf[k] = np.median(all_points[good, k], axis=0), np.median(all_conf[good, k])
-
-    height, width = first.shape[:2]
-    info = {}
-    calib = calibration_from_points(names, points, conf, (width, height), args.conf,
-                                    video=str(media), info=info)
+    calib, first, points, conf, info = predict_calibration(
+        model, names, media, args.frames, args.conf, device)
     if calib is None:
         raise SystemExit(f"Could not fit a trustworthy court ({info.get('reason')}). "
                          "Use the manual click tool for this one.")

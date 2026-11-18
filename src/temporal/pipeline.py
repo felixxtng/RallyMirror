@@ -1,7 +1,7 @@
 """Temporal phase-recognition pipeline (the public interface).
 
 This is the single entry point the demo (and, later, real callers) use. It wires
-together the three pieces Person 4 owns:
+together the three pieces the temporal module owns:
 
     pose record (Contract 2)  ->  windower  ->  classifier  ->  phase
 
@@ -52,7 +52,15 @@ class PhasePipeline:
         validate_pose_record(pose_record)
         player_id = pose_record["player_id"]
         frame = pose_record["frame"]
-        features = pose_record_to_vector(pose_record)
+        # Build the base vector with the SAME feature set the classifier was
+        # trained on. The court feature (2 extra channels) must be baked in here
+        # if and only if the classifier expects it, keeping train/inference in
+        # lockstep. Classifiers without the flag (e.g. the rule-based baseline)
+        # default to coordinates only.
+        use_court = getattr(self.classifier, "use_court", False)
+        use_shuttle = getattr(self.classifier, "use_shuttle", False)
+        features = pose_record_to_vector(pose_record, use_court=use_court,
+                                         use_shuttle=use_shuttle)
 
         window = self.windower.push(player_id, frame, features)
         if window is None:

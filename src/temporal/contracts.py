@@ -1,17 +1,11 @@
 """Upstream data contracts for the temporal/phase-recognition module.
 
-Person 4 (temporal/phase) sits at the end of the pipeline:
+The temporal module sits at the end of the pipeline:
 
-    Person 1 (tracking)  ->  Person 2 (pose)  ->  Person 4 (this module)
+    Detection            ->  Pose             ->  Temporal
     tracked-clip records     per-frame poses      keypoint sequence -> phase
 
-Both upstreams are unfinished. Rather than block on them, we define the exact
-record shapes we depend on here, validate against them (tolerantly), and ship
-stub generators so the temporal interface and demo run with synthetic data
-today. When Person 1 / Person 2 push, their real output is swapped in with no
-changes to the temporal code -- as long as it satisfies these contracts.
-
-Contract 1 -- tracked-clip record (produced by Person 1):
+Contract 1 -- tracked-clip record:
     {
       "frame": int,                      # 0-based frame index
       "player_id": int,                  # stable track id
@@ -20,10 +14,8 @@ Contract 1 -- tracked-clip record (produced by Person 1):
       ... any extra fields (e.g. "shuttle") are ALLOWED and IGNORED
     }
   Reference shape = the JSONL that src/detection/demo.py already writes.
-  We are a *tolerant consumer*: Person 1 ships one artifact for the whole team
-  (players + shuttle); we read only the player fields we need.
 
-Contract 2 -- per-frame pose (now MERGED into Person 1's JSONL):
+Contract 2 -- per-frame pose:
   Pose estimation (MediaPipe Pose Landmarker, 33 keypoints) runs sequentially
   after player tracking, so each JSONL line carries BOTH the tracked-clip
   fields and a ``keypoints`` list:
@@ -82,7 +74,7 @@ class ContractError(ValueError):
 
 
 # ---------------------------------------------------------------------------
-# Contract 1: tracked-clip record (Person 1)
+# Contract 1: tracked-clip record
 # ---------------------------------------------------------------------------
 
 def validate_track_record(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -114,7 +106,7 @@ def validate_track_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Contract 2: per-frame pose record (Person 2)
+# Contract 2: per-frame pose record
 # ---------------------------------------------------------------------------
 
 def validate_pose_record(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -178,15 +170,49 @@ def _keypoint_coords(kp: Any, index: int) -> tuple[float, float]:
     return float(x), float(y)
 
 
-def pose_record_to_vector(record: Dict[str, Any]) -> List[float]:
-    """Flatten a validated pose record's keypoints into a flat (x, y) feature
-    vector of length ``2 * NUM_KEYPOINTS``. Confidence/visibility, if present,
-    are dropped -- the temporal interface works on coordinates. This is the
-    single per-frame feature the windower consumes.
+# Court-space normalization. Person 3's mapper emits ``court_xy`` in METRES on a
+# BWF court (x across 0..6.10, y along 0..13.40). To make court position
+# commensurate with the bbox-normalized keypoints (both ~[0, 1]) before they are
+# concatenated into one feature vector, court metres are divided by the court
+# dimensions. A record with no ``court_xy`` (no trustworthy foot/fit that frame)
+# falls back to court centre (0.5, 0.5) -- a neutral "position unknown" value
+# that, unlike (0, 0), does not read as a specific court corner.
+COURT_WIDTH_M = 6.10
+COURT_LENGTH_M = 13.40
+COURT_CENTRE_NORM = (0.5, 0.5)
 
-    Accepts both the internal list format and the MediaPipe dict format, but
-    coordinates are expected to already be bbox-normalized (use
-    ``load_pose_jsonl`` to normalize raw pixel data first).
+# Shuttle rally-state feature. The signal that separates dead-time (idle) from
+# live play is shuttle SPEED, not presence: during idle the shuttle lies on the
+# floor or is carried (slow/still) while visible, so presence alone does not
+# distinguish idle from ready. ``src.shuttle``-style mapping writes a smoothed
+# per-frame ``shuttle_speed`` (already normalized, resolution-independent) and a
+# ``shuttle_speed_valid`` flag (1.0 if speed was computable from two consecutive
+# visible detections, else 0.0). The validity flag is essential: a missing
+# shuttle (21% of frames, mid-rally occlusion OR off-screen between points) must
+# read as "unknown", NOT as speed 0 (which would look like idle). Encoding both
+# lets the model learn "unknown" rather than be told a false zero.
+SHUTTLE_FEATURE_LEN = 2  # (smoothed speed, validity flag)
+
+
+def pose_record_to_vector(record: Dict[str, Any], use_court: bool = False,
+                          use_shuttle: bool = False) -> List[float]:
+    """Flatten a validated pose record into the per-frame BASE feature vector.
+
+    Layout (each optional block appended in this fixed order):
+        [kp coords ...]                      length 2 * NUM_KEYPOINTS
+        [court_x_norm, court_y_norm]         if use_court   (+2)
+        [shuttle_speed, shuttle_valid]       if use_shuttle (+2)
+
+    Keypoints are expected bbox-normalized (use ``load_pose_jsonl`` first).
+    Court is appended BEFORE shuttle deliberately: the velocity transform
+    (``features.add_velocity``) differences the keypoint+court prefix (court
+    motion is meaningful), but must NOT difference the shuttle channels --
+    shuttle_speed is already a velocity-like quantity and the validity flag is
+    categorical. ``features.transform_window`` relies on this ordering to split
+    the shuttle tail off before differencing.
+
+    Training and inference MUST agree on both flags (the classifier persists
+    them alongside ``use_velocity``).
     """
     kps = record["keypoints"]
     vector: List[float] = []
@@ -194,11 +220,49 @@ def pose_record_to_vector(record: Dict[str, Any]) -> List[float]:
         x, y = _keypoint_coords(kp, i)
         vector.append(x)
         vector.append(y)
+    if use_court:
+        cx, cy = court_xy_norm(record)
+        vector.append(cx)
+        vector.append(cy)
+    if use_shuttle:
+        speed, valid = shuttle_features(record)
+        vector.append(speed)
+        vector.append(valid)
     return vector
 
 
+def court_xy_norm(record: Dict[str, Any]) -> tuple[float, float]:
+    """Return the record's court position normalized to ~[0, 1].
+
+    Reads ``court_xy`` (metres, as added by ``src.court.mapper``). Missing or
+    malformed -> court centre ``COURT_CENTRE_NORM`` ("position unknown").
+    """
+    court = record.get("court_xy")
+    if (not isinstance(court, (list, tuple)) or len(court) != 2
+            or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                       for v in court)):
+        return COURT_CENTRE_NORM
+    return (float(court[0]) / COURT_WIDTH_M, float(court[1]) / COURT_LENGTH_M)
+
+
+def shuttle_features(record: Dict[str, Any]) -> tuple[float, float]:
+    """Return ``(shuttle_speed, shuttle_speed_valid)`` for a record.
+
+    Reads ``shuttle_speed`` (smoothed, normalized) and ``shuttle_speed_valid``
+    (0/1) as written by the shuttle mapping stage. When either is missing or
+    malformed the pair is ``(0.0, 0.0)`` -- speed 0 with validity 0, i.e. an
+    explicit "unknown" the model can learn, never a false "still shuttle".
+    """
+    speed = record.get("shuttle_speed")
+    valid = record.get("shuttle_speed_valid")
+    if (not isinstance(speed, (int, float)) or isinstance(speed, bool)
+            or not isinstance(valid, (int, float)) or isinstance(valid, bool)):
+        return (0.0, 0.0)
+    return (float(speed), 1.0 if valid else 0.0)
+
+
 # ---------------------------------------------------------------------------
-# Stub generators (stand in for Person 1 / Person 2 until they push)
+# Stub generators
 # ---------------------------------------------------------------------------
 
 def stub_track_stream(
@@ -251,7 +315,7 @@ def stub_pose_stream(
         segment 2: stroke  -- sharp wrist swing, body otherwise steady
 
     Segments repeat every ``3 * segment_len`` frames. This makes the stub a
-    better behavioural stand-in for Person 2's eventual real poses: it has
+    better behavioural stand-in for the pose module's eventual real poses: it has
     distinct, separable motion signatures. Keypoints are bbox-normalized and the
     stream remains deterministic under ``seed``.
     """
@@ -304,11 +368,11 @@ def validate_stream(
     return [validator(r) for r in records]
 
 # ---------------------------------------------------------------------------
-# Loading real upstream JSONL (replaces the stubs once Person 1 pushes)
+# Loading real upstream JSONL
 # ---------------------------------------------------------------------------
 
 def load_track_jsonl(path: str) -> List[Dict[str, Any]]:
-    """Load Person 1's tracked-clip JSONL into a list of validated records.
+    """Load tracked-clip JSONL into a list of validated records.
 
     One JSON object per line (matching ``src/detection/demo.py``). Tolerant:
     blank lines are ignored, and any line that is not valid JSON or that fails
@@ -423,7 +487,7 @@ def select_keypoints_by_name(keypoints: List[Any]) -> List[Any]:
 
 
 def load_pose_jsonl(path: str) -> List[Dict[str, Any]]:
-    """Load the merged track+pose JSONL (Person 1's ``pose_extract`` output).
+    """Load the merged track+pose JSONL (``pose_extract`` output).
 
     Each line carries both a tracked-clip record (``bbox``) and a ``keypoints``
     list. MediaPipe keypoints are in absolute pixels; this loader:
@@ -464,6 +528,16 @@ def load_pose_jsonl(path: str) -> List[Dict[str, Any]]:
                     "player_id": raw["player_id"],
                     "keypoints": norm_kps,
                 }
+                # Preserve court position (metres) when present, so the court
+                # feature can be built downstream. Absent -> handled as "unknown"
+                # (court centre) by court_xy_norm; never fabricated here.
+                if "court_xy" in raw:
+                    pose_record["court_xy"] = raw["court_xy"]
+                # Likewise preserve the shuttle rally-state fields when present.
+                if "shuttle_speed" in raw:
+                    pose_record["shuttle_speed"] = raw["shuttle_speed"]
+                if "shuttle_speed_valid" in raw:
+                    pose_record["shuttle_speed_valid"] = raw["shuttle_speed_valid"]
                 validate_pose_record(pose_record)
             except ContractError as exc:
                 print(f"[contracts] skipping invalid pose record at {path}:{line_no}: {exc}")

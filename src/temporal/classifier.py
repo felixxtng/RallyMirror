@@ -1,7 +1,6 @@
 """Phase classifiers for the temporal interface.
 
-Per the Person 4 brief ("build the interface first; do not start by training a
-huge model"), this module defines a *swappable* classifier interface and ships a
+This module defines a *swappable* classifier interface and ships a
 rule-based implementation that works today. A trainable implementation is a
 documented placeholder: it slots into the same interface later without changing
 any calling code (the windower, demo overlay, etc.).
@@ -127,16 +126,22 @@ class TrainableClassifier:
         pipeline = PhasePipeline(window_size=30, classifier=clf)
     """
 
-    def __init__(self, model, use_velocity: bool, device: str = "cpu"):
+    def __init__(self, model, use_velocity: bool, use_court: bool = False,
+                 use_shuttle: bool = False, device: str = "cpu"):
         # ``model`` is a torch ``TCN``. Use the factory methods below rather than
-        # constructing directly in most cases. ``use_velocity`` must match how
-        # the model was built/trained -- it governs the feature transform applied
-        # to incoming coordinate windows.
+        # constructing directly in most cases. ``use_velocity``/``use_court``/
+        # ``use_shuttle`` must match how the model was built/trained: velocity
+        # governs the transform applied here; court and shuttle record which
+        # extra base channels the incoming windows carry (baked in upstream by
+        # pose_record_to_vector) so the expected base length and the transform
+        # split are correct.
         import torch  # lazy
 
         self._torch = torch
         self.device = device
         self.use_velocity = use_velocity
+        self.use_court = use_court
+        self.use_shuttle = use_shuttle
         self.model = model.to(device)
         self.model.eval()
 
@@ -150,27 +155,31 @@ class TrainableClassifier:
         kernel_size: int = 3,
         dropout: float = 0.2,
         use_velocity: bool = False,
+        use_court: bool = False,
+        use_shuttle: bool = False,
         device: str = "cpu",
     ) -> "TrainableClassifier":
         """Create a wrapper around a freshly-initialised TCN.
 
-        ``use_velocity`` selects the feature set: when True the model consumes
-        coordinate+velocity frames (``features.feature_len(True)`` channels) and
-        velocity is computed from each incoming window; when False, coordinates
-        only.
+        The feature flags together set the model's input channel count via
+        ``features.feature_len``: court adds 2 base channels (velocity-doubled
+        with the pose coords); shuttle adds 2 channels (speed + validity) that
+        are NOT velocity-doubled; velocity doubles the pose+court part. All
+        flags must match the windows fed at train and inference time.
         """
         from src.temporal.tcn import TCN
         from src.temporal.features import feature_len
 
         num_classes = num_classes if num_classes is not None else len(schema.PHASES)
         model = TCN(
-            feature_len=feature_len(use_velocity),
+            feature_len=feature_len(use_velocity, use_court, use_shuttle),
             num_classes=num_classes,
             channels=channels,
             kernel_size=kernel_size,
             dropout=dropout,
         )
-        return cls(model, use_velocity=use_velocity, device=device)
+        return cls(model, use_velocity=use_velocity, use_court=use_court,
+                   use_shuttle=use_shuttle, device=device)
 
     @classmethod
     def load(cls, path: str, device: str = "cpu") -> "TrainableClassifier":
@@ -181,18 +190,23 @@ class TrainableClassifier:
         ckpt = torch.load(path, map_location=device)
         model = TCN(**ckpt["hparams"])
         model.load_state_dict(ckpt["state_dict"])
-        # Default False for older checkpoints that predate the velocity feature.
+        # Default False for older checkpoints that predate these features.
         use_velocity = ckpt.get("use_velocity", False)
-        return cls(model, use_velocity=use_velocity, device=device)
+        use_court = ckpt.get("use_court", False)
+        use_shuttle = ckpt.get("use_shuttle", False)
+        return cls(model, use_velocity=use_velocity, use_court=use_court,
+                   use_shuttle=use_shuttle, device=device)
 
     def save(self, path: str) -> None:
-        """Persist architecture hyperparameters + weights (and the feature flag)
-        so ``load`` reconstructs an identically-configured model."""
+        """Persist architecture hyperparameters + weights (and the feature
+        flags) so ``load`` reconstructs an identically-configured model."""
         self._torch.save(
             {
                 "hparams": self.model.hparams,
                 "state_dict": self.model.state_dict(),
                 "use_velocity": self.use_velocity,
+                "use_court": self.use_court,
+                "use_shuttle": self.use_shuttle,
             },
             path,
         )
@@ -203,18 +217,21 @@ class TrainableClassifier:
         # ``window`` arrives as coordinate-only frames (the same shape the
         # rule-based classifier and the pipeline use). Apply the configured
         # feature transform HERE so train and inference stay in lockstep.
-        from src.temporal.features import transform_window
+        from src.temporal.features import transform_window, base_feature_len
 
         if not window:
             raise ValueError("window must be non-empty")
+        expected_base = base_feature_len(self.use_court, self.use_shuttle)
+        extras = ("".join(c for c, on in ((" + court", self.use_court),
+                                          (" + shuttle", self.use_shuttle)) if on))
         for i, frame in enumerate(window):
-            if len(frame) != FEATURE_LEN:
+            if len(frame) != expected_base:
                 raise ValueError(
-                    f"frame {i} has length {len(frame)}, expected coordinate "
-                    f"length {FEATURE_LEN} (velocity is added internally if the "
-                    "model was trained with it)"
+                    f"frame {i} has length {len(frame)}, expected base length "
+                    f"{expected_base} (keypoints{extras}; velocity is added "
+                    "internally if the model was trained with it)"
                 )
-        feats = transform_window(window, self.use_velocity)
+        feats = transform_window(window, self.use_velocity, self.use_shuttle)
         return self._torch.tensor([feats], dtype=self._torch.float32, device=self.device)
 
     def predict(self, window: List[List[float]]) -> str:

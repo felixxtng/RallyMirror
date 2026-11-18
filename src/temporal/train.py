@@ -19,6 +19,18 @@ Design choices for the small-data regime (~15 clips):
   upstream tracker is fixed and a clip regenerates, it rejoins with no code
   change.
 
+Single- vs multi-player join:
+- Legacy pose data carries one (often unstable) tracker id per clip; the
+  default join matches annotations to pose by FRAME ONLY (``single_player``).
+- Regenerated data carries TWO stable canonical slots per frame (see
+  src/detection/canonicalize.py). Those clips use the per-``player_id`` join so
+  each slot is its own stream and windows never mix the two bodies; annotations
+  must then cover both slots.
+- The mode is auto-detected per clip (one distinct slot -> single, two+ ->
+  multi) and can be forced with ``--single-player`` / ``--multi-player``.
+- Canonicalization-rejected strays (``player_id == -1``) are dropped on load so
+  they neither train nor skew the survival gate.
+
 Run::
 
     .\\.venv\\Scripts\\python.exe -m src.temporal.train \\
@@ -44,6 +56,27 @@ from src.temporal import schema
 from src.temporal.annotation import AnnotationSet, build_windowed_training_dataset
 from src.temporal.contracts import load_pose_jsonl
 
+# Canonicalization (src/detection/canonicalize.py) tags records it could not
+# attribute to a real player slot with this id. They are anomalies (strays /
+# un-stitchable fragments) and must never become training data, so they are
+# dropped on load. Kept as a local literal to avoid a temporal->detection import.
+REJECTED_SLOT = -1
+
+
+def _drop_rejected(poses: List[Dict]) -> List[Dict]:
+    """Remove canonicalization-rejected records (``player_id == REJECTED_SLOT``)."""
+    return [p for p in poses if p.get("player_id") != REJECTED_SLOT]
+
+
+def _detect_single_player(poses: List[Dict]) -> bool:
+    """True if these (already rejected-filtered) records describe one player.
+
+    Auto-detection for the ``single_player`` join: a clip with a single distinct
+    ``player_id`` uses the frame-only join (singles POC / legacy single-slot
+    data); two or more canonical slots use the per-id multi-player join.
+    """
+    return len({p["player_id"] for p in poses}) <= 1
+
 
 # ---------------------------------------------------------------------------
 # Data assembly (pure logic -- unit tested, no torch)
@@ -56,6 +89,10 @@ class ClipData:
     y: List[int]                    # phase indices
     raw_poses: int = 0
     valid_poses: int = 0
+    # Per-window anchor frame (the frame each window's label/prediction is
+    # "about"). Parallel to X/y. Used by the boundary-aware evaluation to lay
+    # predictions back on a per-clip frame timeline; ignored by training.
+    label_frames: List[int] = field(default_factory=list)
 
     @property
     def survival(self) -> float:
@@ -79,9 +116,19 @@ def load_clip(
     window_size: int,
     stride: int,
     label_from: str,
+    single_player: Optional[bool] = None,
+    use_court: bool = False,
+    use_shuttle: bool = False,
 ) -> ClipData:
     """Load one clip's pose + annotation into windowed samples, recording the
-    pose-survival stats used by the quality gate."""
+    pose-survival stats used by the quality gate.
+
+    ``single_player`` selects the annotation join: True = frame-only (one
+    stream for the clip's single annotated player, legacy/singles-POC data),
+    False = per-``player_id`` (one stream per canonical slot, for regenerated
+    two-player data). ``None`` auto-detects from the pose file: one distinct
+    canonical slot -> single-player, two or more -> multi-player.
+    """
     anno_path = os.path.join(annotations_dir, f"{clip_id}.jsonl")
     pose_path = os.path.join(clips_dir, clip_id, "pose.jsonl")
 
@@ -89,13 +136,21 @@ def load_clip(
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):  # suppress per-line skip warnings
         poses = load_pose_jsonl(pose_path)
+    # Drop canonicalization-rejected strays BEFORE windowing and before the
+    # survival stat, so anomalies neither train nor skew the quality gate.
+    poses = _drop_rejected(poses)
+
+    resolved_single = (_detect_single_player(poses)
+                       if single_player is None else single_player)
 
     anno = AnnotationSet.load(anno_path)
-    X, y = build_windowed_training_dataset(
+    X, y, label_frames = build_windowed_training_dataset(
         anno, poses, clip_id, window_size=window_size, stride=stride,
-        label_from=label_from,
+        label_from=label_from, single_player=resolved_single, use_court=use_court,
+        use_shuttle=use_shuttle, return_label_frames=True,
     )
-    return ClipData(clip_id, X, y, raw_poses=raw, valid_poses=len(poses))
+    return ClipData(clip_id, X, y, raw_poses=raw, valid_poses=len(poses),
+                    label_frames=label_frames)
 
 
 @dataclass
@@ -125,11 +180,16 @@ def load_kept_clips(
     stride: int = 1,
     label_from: str = "last",
     min_survival: float = 0.5,
+    single_player: Optional[bool] = None,
+    use_court: bool = False,
+    use_shuttle: bool = False,
 ) -> Tuple[List[ClipData], List[Tuple[str, str]]]:
     """Discover, window, and quality-gate clips. Returns (kept, excluded).
 
     Shared by both the single-split ``assemble_dataset`` and ``cross_validate``
-    so the discovery/gating rules can never drift between them.
+    so the discovery/gating rules can never drift between them. ``single_player``
+    and ``use_court`` are passed through to ``load_clip`` (``single_player=None``
+    = per-clip auto-detect).
     """
     clip_ids = discover_clips(annotations_dir, clips_dir)
     if not clip_ids:
@@ -141,7 +201,8 @@ def load_kept_clips(
     kept: List[ClipData] = []
     excluded: List[Tuple[str, str]] = []
     for cid in clip_ids:
-        clip = load_clip(cid, annotations_dir, clips_dir, window_size, stride, label_from)
+        clip = load_clip(cid, annotations_dir, clips_dir, window_size, stride,
+                         label_from, single_player, use_court, use_shuttle)
         if clip.survival < min_survival:
             excluded.append(
                 (cid, f"pose survival {clip.survival:.0%} < {min_survival:.0%}")
@@ -166,13 +227,19 @@ def assemble_dataset(
     min_survival: float = 0.5,
     val_fraction: float = 0.2,
     seed: int = 0,
+    single_player: Optional[bool] = None,
+    use_court: bool = False,
+    use_shuttle: bool = False,
 ) -> Dataset:
     """Discover, quality-gate, window, and split clips into train/val.
 
     The split is BY CLIP: whole clips are assigned to train or val.
+    ``single_player`` is passed through (``None`` = per-clip auto-detect);
+    ``use_court`` toggles the court-position feature channels.
     """
     kept, excluded = load_kept_clips(
-        annotations_dir, clips_dir, window_size, stride, label_from, min_survival
+        annotations_dir, clips_dir, window_size, stride, label_from, min_survival,
+        single_player, use_court, use_shuttle,
     )
 
     # Split by clip, seeded for reproducibility.
@@ -300,6 +367,9 @@ def train(
     device: str = "cpu",
     use_velocity: bool = True,
     class_weights: bool = False,
+    single_player: Optional[bool] = None,
+    use_court: bool = False,
+    use_shuttle: bool = False,
 ) -> Dict:
     import torch
 
@@ -307,7 +377,7 @@ def train(
 
     data = assemble_dataset(
         annotations_dir, clips_dir, window_size, stride, label_from,
-        min_survival, val_fraction, seed,
+        min_survival, val_fraction, seed, single_player, use_court, use_shuttle,
     )
 
     print("=== clips ===")
@@ -322,16 +392,16 @@ def train(
     Xtr, ytr = data.train_xy()
     Xva, yva = data.val_xy()
     print(f"  train windows: {len(Xtr)}  val windows: {len(Xva)}  "
-          f"velocity: {use_velocity}  weight decay: {weight_decay}  "
-          f"class weights: {class_weights}")
+          f"velocity: {use_velocity}  court: {use_court}  shuttle: {use_shuttle}  "
+          f"weight decay: {weight_decay}  class weights: {class_weights}")
     if not Xtr:
         raise ValueError("no training windows after assembly")
 
     clf, cm = _fit_and_evaluate(
         Xtr, ytr, Xva, yva,
-        use_velocity=use_velocity, lr=lr, weight_decay=weight_decay,
-        batch_size=batch_size, epochs=epochs, patience=patience,
-        class_weights=class_weights, device=device, verbose=True,
+        use_velocity=use_velocity, use_court=use_court, use_shuttle=use_shuttle,
+        lr=lr, weight_decay=weight_decay, batch_size=batch_size, epochs=epochs,
+        patience=patience, class_weights=class_weights, device=device, verbose=True,
     )
 
     os.makedirs(os.path.dirname(checkpoint) or ".", exist_ok=True)
@@ -424,6 +494,9 @@ def cross_validate(
     device: str = "cpu",
     use_velocity: bool = True,
     class_weights: bool = False,
+    single_player: Optional[bool] = None,
+    use_court: bool = False,
+    use_shuttle: bool = False,
 ) -> Dict:
     """k-fold cross-validation at the CLIP level.
 
@@ -439,7 +512,8 @@ def cross_validate(
 
     torch.manual_seed(seed)
     kept, excluded = load_kept_clips(
-        annotations_dir, clips_dir, window_size, stride, label_from, min_survival
+        annotations_dir, clips_dir, window_size, stride, label_from, min_survival,
+        single_player, use_court, use_shuttle,
     )
     print("=== clips ===")
     for cid, reason in excluded:
@@ -448,6 +522,9 @@ def cross_validate(
 
     folds = make_folds(kept, k, seed)
     fold_cms: List[List[List[int]]] = []
+    # Per-clip (frame, true, pred) timelines across all folds, for the
+    # boundary-aware evaluation. Each val clip contributes one timeline.
+    all_timelines: List[List[Tuple[int, int, int]]] = []
 
     for fi, val_clips in enumerate(folds, start=1):
         train_clips = [c for c in kept if c not in val_clips]
@@ -465,28 +542,69 @@ def cross_validate(
             print("  skipped (empty train or val)")
             continue
 
-        _clf, cm = _fit_and_evaluate(
+        clf, cm = _fit_and_evaluate(
             Xtr, ytr, Xva, yva,
-            use_velocity=use_velocity, lr=lr, weight_decay=weight_decay,
-            batch_size=batch_size, epochs=epochs, patience=patience,
-            class_weights=class_weights, device=device, verbose=False,
+            use_velocity=use_velocity, use_court=use_court, use_shuttle=use_shuttle,
+            lr=lr, weight_decay=weight_decay, batch_size=batch_size, epochs=epochs,
+            patience=patience, class_weights=class_weights, device=device,
+            verbose=False,
         )
         if cm is not None:
             fold_cms.append(cm)
+            all_timelines.extend(
+                _clip_timelines(clf, val_clips, use_velocity, use_shuttle, device)
+            )
 
     if not fold_cms:
         raise ValueError("no folds produced a validation result")
 
     report = format_cv_report(fold_cms)
     print("\n" + report)
-    return {"k": k, "fold_confusion_matrices": fold_cms, "report": report}
+
+    boundary_report = None
+    if all_timelines:
+        from src.temporal.eval_boundary import format_boundary_report
+
+        boundary_report = format_boundary_report(all_timelines, schema.PHASES)
+        print("\n" + boundary_report)
+
+    return {"k": k, "fold_confusion_matrices": fold_cms, "report": report,
+            "boundary_report": boundary_report}
+
+
+def _clip_timelines(clf, val_clips, use_velocity, use_shuttle, device):
+    """Build per-clip ``(frame, true_idx, pred_idx)`` timelines for a fold.
+
+    Predicts each val clip's windows with the fold's trained model and anchors
+    each prediction at that window's label frame, giving a per-clip timeline the
+    boundary-aware metrics consume. Windows are sorted by anchor frame so the
+    timeline is in temporal order (multiple players in a clip interleave by
+    frame, which is fine -- boundary/segment metrics look up by frame value).
+    """
+    import torch
+    from src.temporal.features import transform_window
+
+    timelines = []
+    model = clf.model
+    model.eval()
+    for c in val_clips:
+        if not c.X:
+            continue
+        feats = [transform_window(w, use_velocity, use_shuttle) for w in c.X]
+        with torch.no_grad():
+            preds = model(
+                torch.tensor(feats, dtype=torch.float32, device=device)
+            ).argmax(dim=1).tolist()
+        triples = sorted(zip(c.label_frames, c.y, preds), key=lambda t: t[0])
+        timelines.append([(int(f), int(t), int(p)) for f, t, p in triples])
+    return timelines
 
 
 def _fit_and_evaluate(
     Xtr, ytr, Xva, yva, *,
     use_velocity: bool, lr: float, weight_decay: float, batch_size: int,
     epochs: int, patience: int, class_weights: bool, device: str,
-    verbose: bool = False,
+    use_court: bool = False, use_shuttle: bool = False, verbose: bool = False,
 ):
     """Train one TCN on (Xtr,ytr), early-stopping on (Xva,yva); return
     ``(classifier, val_confusion_matrix_or_None)``.
@@ -501,7 +619,7 @@ def _fit_and_evaluate(
     from src.temporal.classifier import TrainableClassifier
     from src.temporal.features import transform_window
 
-    Xtr_feat = [transform_window(w, use_velocity) for w in Xtr]
+    Xtr_feat = [transform_window(w, use_velocity, use_shuttle) for w in Xtr]
     Xtr_t = torch.tensor(Xtr_feat, dtype=torch.float32)
     ytr_t = torch.tensor(ytr, dtype=torch.long)
     train_loader = DataLoader(
@@ -510,11 +628,13 @@ def _fit_and_evaluate(
 
     has_val = len(Xva) > 0
     if has_val:
-        Xva_feat = [transform_window(w, use_velocity) for w in Xva]
+        Xva_feat = [transform_window(w, use_velocity, use_shuttle) for w in Xva]
         Xva_t = torch.tensor(Xva_feat, dtype=torch.float32)
         yva_t = torch.tensor(yva, dtype=torch.long)
 
-    clf = TrainableClassifier.from_new(use_velocity=use_velocity, device=device)
+    clf = TrainableClassifier.from_new(
+        use_velocity=use_velocity, use_court=use_court, use_shuttle=use_shuttle,
+        device=device)
     model = clf.model
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -602,6 +722,26 @@ def main(argv: Optional[List[str]] = None) -> None:
     p.add_argument("--class-weights", action="store_true",
                    help="weight the loss by inverse class frequency (train "
                         "split) so rare phases like 'idle' are not ignored")
+    player_mode = p.add_mutually_exclusive_group()
+    player_mode.add_argument(
+        "--single-player", dest="single_player", action="store_const", const=True,
+        help="force the frame-only join (one annotated player per clip, legacy "
+             "single-slot pose data)")
+    player_mode.add_argument(
+        "--multi-player", dest="single_player", action="store_const", const=False,
+        help="force the per-player_id join (regenerated two-slot pose data)")
+    p.set_defaults(single_player=None)  # None = auto-detect per clip
+    p.add_argument("--court", dest="court", action="store_true",
+                   help="add the court-position feature (normalized court_xy "
+                        "per frame, + its velocity); requires pose.jsonl records "
+                        "to carry court_xy (run the pipeline's court mapping)")
+    p.set_defaults(court=False)
+    p.add_argument("--shuttle", dest="shuttle", action="store_true",
+                   help="add the shuttle rally-state feature (smoothed shuttle "
+                        "speed + validity flag per frame; NOT velocity-doubled); "
+                        "requires pose.jsonl records to carry shuttle_speed / "
+                        "shuttle_speed_valid (run the pipeline's shuttle mapping)")
+    p.set_defaults(shuttle=False)
     p.add_argument("--cross-validate", action="store_true",
                    help="run k-fold cross-validation (measurement) instead of a "
                         "single train/val split; saves no checkpoint")
@@ -616,6 +756,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             weight_decay=args.weight_decay, batch_size=args.batch_size,
             patience=args.patience, seed=args.seed, device=args.device,
             use_velocity=args.velocity, class_weights=args.class_weights,
+            single_player=args.single_player, use_court=args.court,
+            use_shuttle=args.shuttle,
         )
         return
 
@@ -626,7 +768,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         epochs=args.epochs, lr=args.lr, weight_decay=args.weight_decay, batch_size=args.batch_size,
         patience=args.patience, seed=args.seed, checkpoint=args.checkpoint,
         use_velocity=args.velocity, class_weights=args.class_weights,
-        device=args.device,
+        device=args.device, single_player=args.single_player, use_court=args.court,
+        use_shuttle=args.shuttle,
     )
 
 

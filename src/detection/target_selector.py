@@ -30,6 +30,7 @@ defaults to 1 via ``select_target`` for the existing single-target call sites;
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, fields
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -67,10 +68,20 @@ class SelectionConfig:
     min_aspect_ratio: Optional[float] = None       # height / width, lower bound
     max_aspect_ratio: Optional[float] = None       # height / width, upper bound
 
-    # (4) Court ROI. Polygon of (x, y) image points enclosing the playing area.
-    # When set, a track is kept only if its bbox bottom-centre is inside it.
-    # Left None until Person 3's court detection is wired in.
+    # (4) Court ROI. Two ways to supply it, checked in this order:
+    #   - court_roi: a CourtROI (metric-space filter via Person 3's homography).
+    #     Preferred: correct under perspective, margin tunable in metres.
+    #   - court_polygon: an image-space polygon of (x, y) points, as a fallback
+    #     when no calibration/homography is available.
+    # When both are None the stage is a pass-through. A track is kept iff its
+    # bbox bottom-centre is on court.
+    court_roi: Optional["CourtROI"] = None
     court_polygon: Optional[Sequence[Point]] = None
+
+    # On-court margin in metres for the metric ROI. Sourced from the shared
+    # ``court.bounds_margin_m`` so detection and Person 3's mapper agree on what
+    # counts as "on court". Only used when a court_roi is built from a calibration.
+    court_margin_m: float = 1.0
 
     @classmethod
     def from_config(cls, config: Optional[Dict[str, Any]] = None) -> "SelectionConfig":
@@ -99,6 +110,13 @@ class SelectionConfig:
         poly = overrides.get("court_polygon")
         if poly:
             overrides["court_polygon"] = [tuple(pt) for pt in poly]
+
+        # Share the on-court margin with Person 3's court mapper so both agree
+        # on "on court". detection.target_selection may override it explicitly.
+        if "court_margin_m" not in overrides:
+            court_section = config.get("court") or {}
+            if "bounds_margin_m" in court_section:
+                overrides["court_margin_m"] = court_section["bounds_margin_m"]
 
         return cls(**overrides)
 
@@ -155,6 +173,68 @@ def point_in_polygon(point: Point, polygon: Sequence[Point]) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Court ROI (metric-space) -- uses court module
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CourtROI:
+    """Metric-space court filter built from a calibration homography.
+
+    A player is "on court" when the court-metre position of their ground-contact
+    point (bbox bottom-centre) falls inside the BWF court grown by
+    ``margin_m`` metres. This reuses the homography + bounds test
+    directly rather than approximating the court as an image polygon, so it is
+    correct under perspective and the margin is tunable in metres.
+
+    ``H`` maps IMAGE pixels -> court metres, but the homography was fit against
+    an image of size ``calib_size`` (e.g. native 2810x1638). The tracker runs
+    on the decoded frame, which may be a different size, so foot pixels are
+    scaled from the current ``frame_size`` into ``calib_size`` before mapping.
+    """
+
+    H: Any                               # np.ndarray, image(calib px) -> court m
+    calib_size: Optional[Tuple[int, int]] = None   # (width, height) H was fit on
+    margin_m: float = 1.0
+
+    def is_inside(self, point: Point, frame_size: Optional[Tuple[int, int]] = None) -> bool:
+        """True if an image-space ``point`` (current-frame pixels) maps onto the
+        court. ``frame_size`` is the size of the frame ``point`` came from; when
+        it differs from ``calib_size`` the point is scaled to calibration space.
+        """
+        # Imported here so the detection module has no hard numpy/court import
+        # cost unless a court ROI is actually in use.
+        from src.court.court_model import in_court_bounds
+        from src.court.homography import apply_homography
+
+        x, y = point
+        if frame_size and self.calib_size and tuple(frame_size) != tuple(self.calib_size):
+            x *= self.calib_size[0] / frame_size[0]
+            y *= self.calib_size[1] / frame_size[1]
+        court_xy = apply_homography(self.H, (x, y))
+        try:
+            if not all(math.isfinite(v) for v in court_xy):
+                return False
+        except TypeError:
+            return False
+        return bool(in_court_bounds(court_xy, self.margin_m))
+
+
+def load_court_roi(calibration_path: str, margin_m: float = 1.0) -> CourtROI:
+    """Build a :class:`CourtROI` from a saved court calibration JSON.
+
+    The calibration is produced by ``src.court.calibrate`` (manual) or
+    ``src.court.predict`` (learned) and carries ``H_image_to_court`` plus the
+    ``image_size`` it was fit on.
+    """
+    from src.court.calibration import load_calibration
+
+    cal = load_calibration(calibration_path)
+    size = cal.get("image_size")
+    calib_size = tuple(size) if size else None
+    return CourtROI(H=cal["H"], calib_size=calib_size, margin_m=margin_m)
+
+
+# ---------------------------------------------------------------------------
 # Pipeline stages
 # ---------------------------------------------------------------------------
 
@@ -200,18 +280,27 @@ def _geometry_filter(tracks: List[Track], cfg: SelectionConfig) -> List[Track]:
     return kept
 
 
-def _court_roi_filter(tracks: List[Track], cfg: SelectionConfig) -> List[Track]:
-    """(4) Keep only tracks standing inside the court polygon. [WIP seam]
+def _court_roi_filter(
+    tracks: List[Track],
+    cfg: SelectionConfig,
+    frame_size: Optional[Tuple[int, int]] = None,
+) -> List[Track]:
+    """(4) Keep only tracks standing on the court -- the primary spectator
+    safeguard. A track survives iff its bbox bottom-centre
+    (``bbox_bottom_centre``) is on court.
 
-    This is the primary spectator safeguard. Until Person 3's court-coordinate
-    detection is wired in, ``cfg.court_polygon`` is ``None`` and this stage is a
-    pass-through. Once a polygon is supplied, a track survives iff its bbox
-    bottom-centre (``bbox_bottom_centre``) lies within the polygon.
+    Prefers the metric-space ``cfg.court_roi`` (Person 3's homography); falls
+    back to the image-space ``cfg.court_polygon``; with neither set this stage
+    is a pass-through.
     """
-    polygon = cfg.court_polygon
-    if not polygon:
-        return tracks
-    return [t for t in tracks if point_in_polygon(bbox_bottom_centre(t["bbox"]), polygon)]
+    if cfg.court_roi is not None:
+        roi = cfg.court_roi
+        return [t for t in tracks
+                if roi.is_inside(bbox_bottom_centre(t["bbox"]), frame_size)]
+    if cfg.court_polygon:
+        return [t for t in tracks
+                if point_in_polygon(bbox_bottom_centre(t["bbox"]), cfg.court_polygon)]
+    return tracks
 
 
 def _rank(tracks: List[Track]) -> List[Track]:
@@ -231,12 +320,18 @@ def _rank(tracks: List[Track]) -> List[Track]:
 def select_targets(
     tracks: Optional[Sequence[Track]],
     config: Optional[SelectionConfig] = None,
+    frame_size: Optional[Tuple[int, int]] = None,
 ) -> List[Track]:
     """Run the selection pipeline and return up to ``config.max_targets`` tracks.
 
     The returned list is ranked (strongest candidate first) and may be empty.
     This is the multi-player entry point; singles with both players covered uses
     the default ``max_targets == 2``.
+
+    ``frame_size`` is the ``(width, height)`` of the frame the tracks came from.
+    It is only needed when a metric-space ``court_roi`` is configured and the
+    frame size differs from the calibration's image size (to scale foot pixels
+    into calibration space). Harmless to omit otherwise.
     """
     if not tracks:
         return []
@@ -245,7 +340,7 @@ def select_targets(
     stage: List[Track] = list(tracks)
     stage = _confidence_gate(stage, cfg)
     stage = _geometry_filter(stage, cfg)
-    stage = _court_roi_filter(stage, cfg)
+    stage = _court_roi_filter(stage, cfg, frame_size)
     stage = _rank(stage)
 
     if cfg.max_targets is not None and cfg.max_targets >= 0:
@@ -256,6 +351,7 @@ def select_targets(
 def select_target(
     tracks: Optional[Sequence[Track]],
     config: Optional[SelectionConfig] = None,
+    frame_size: Optional[Tuple[int, int]] = None,
 ) -> Optional[Track]:
     """Back-compat single-target entry point.
 
@@ -267,5 +363,5 @@ def select_target(
     if cfg.max_targets != 1:
         # Don't mutate the caller's config; just cap to one for this call.
         cfg = SelectionConfig(**{**cfg.__dict__, "max_targets": 1})
-    targets = select_targets(tracks, cfg)
+    targets = select_targets(tracks, cfg, frame_size)
     return targets[0] if targets else None

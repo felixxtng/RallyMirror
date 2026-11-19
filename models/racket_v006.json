@@ -1,0 +1,77 @@
+{
+  "name": "RallyMirror player-owned racket string-bed centre",
+  "version": "v006",
+  "weights_file": "models/racket_center_v006.pt",
+  "weights_sha256": "313da2f2f2958744d81318d1dbdef9b0b84fd2eb6ca95d7250ec0555f07283d5",
+  "weights_bytes": 45583007,
+  "checkpoint_format": "racket_owner_real_v004",
+  "image_size": 768,
+  "context_padding": 0.05,
+  "body_names": [
+    "nose",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
+    "left_heel",
+    "right_heel",
+    "left_foot_index",
+    "right_foot_index"
+  ],
+  "selected_stage": "full",
+  "selected_epoch": 4,
+  "runtime_adapter": "src.racket.real_owner_infer.RealOwnerRacketPredictor",
+  "input_coordinate_system": "original_frame_pixels",
+  "output": "separate player.racket head_center",
+  "mediapipe_finetuned": false,
+  "source_match_split": true,
+  "training": {
+    "frames": 3259,
+    "near_queries": 2970,
+    "far_queries": 3159,
+    "rallies": 25
+  },
+  "validation": {
+    "frames": 444,
+    "queries": 888,
+    "match_groups": [
+      "match11",
+      "match13"
+    ],
+    "metric": "PCK20 including misses; original-video pixels",
+    "near": 0.8806306306306306,
+    "far": 0.8400900900900901,
+    "combined": 0.8603603603603603,
+    "mean_error_pixels": 17.664234639422144,
+    "wrong_racket_hits": 12,
+    "ownership_eligible_queries": 884,
+    "acceptance_threshold_each_side": 0.8,
+    "acceptance_passed": true,
+    "note": "444 fixed frame IDs with 3 explicit corrections; located verified queries only"
+  },
+  "matched_v005_baseline": {
+    "image_size": 768,
+    "near": 0.8153153153153153,
+    "far": 0.7545045045045045
+  },
+  "test": {
+    "qualitative_clip": "rally16",
+    "match_group": "match06",
+    "quantitative_accuracy_measured": false,
+    "footage_inspected": true
+  },
+  "limitations": [
+    "No calibrated racket visibility or confidence",
+    "Requires upstream person boxes and stable tracker IDs",
+    "Validation accuracy is not full-video recall",
+    "Temporal classifier does not automatically consume the new field"
+  ]
+}

@@ -33,3 +33,24 @@ data/shuttle/clips/*/*
 dataset/
 runs/
 calibration_pred/
+
+# Racket experiments and portable datasets stay local
+/archives/
+/Runpod/
+/docs/chat_exports/
+*.zip
+*.installing
+# Share the selected final checkpoint; keep future experiment checkpoints local.
+/models/racket*.pt
+/models/racket*.pth
+!/models/racket_center_v006.pt
+/models/*.installing
+
+# Generated test/build products
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/

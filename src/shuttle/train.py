@@ -274,8 +274,8 @@ def main(argv=None):
         return
     start_epoch = state['epoch']+1
     stop_epoch = min(args.epochs, start_epoch) if args.smoke_test else args.epochs
-    train_loader = DataLoader(train, batch_size=config['batch_size'], shuffle=True, num_workers=0)
-    val_loader = DataLoader(val, batch_size=config['batch_size'], shuffle=False, num_workers=0)
+    train_loader = DataLoader(train, batch_size=config['batch_size'], shuffle=True, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(val, batch_size=config['batch_size'], shuffle=False, num_workers=8, pin_memory=True)
     limit = 1 if args.smoke_test else None
     for epoch in range(start_epoch, stop_epoch+1):
         lr_used = optimizer.param_groups[0]['lr']

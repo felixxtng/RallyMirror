@@ -1,20 +1,28 @@
 """Dependency-free checks of geometry; not a real model/inference test."""
 import ast
 import math
+from dataclasses import dataclass, fields
 from pathlib import Path
 from types import SimpleNamespace as NS
+from typing import Any, Dict, Optional, Sequence
 import unittest
 
 source = Path(__file__).resolve().parents[1] / "src/pose/estimator.py"
 tree = ast.parse(source.read_text())
 # Load just the actual geometry and extraction definitions without vision packages.
 selected = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))
-            and n.name in {"crop_bounds", "PlayerPose"}]
-namespace = {"math": math}
+            and n.name in {"crop_bounds", "PlayerPose", "OverlapConfig", "_iou",
+                           "_adaptive_padding", "_mask_others", "_centroid_within_bbox"}]
+namespace = {"math": math, "dataclass": dataclass, "fields": fields,
+             "Any": Any, "Dict": Dict, "Optional": Optional, "Sequence": Sequence,
+             "__name__": __name__}
 exec(compile(ast.Module(body=selected, type_ignores=[]), str(source), "exec"), namespace)
 
 class Frame:
     shape = (100, 200, 3)
+    def copy(self):
+        return self
+
     def __getitem__(self, slices):
         self.slices = slices
         return self

@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: rallymirror
-Version: 0.1.0
-Summary: Badminton match analysis: player tracking and phase/action recognition (POC)
-Requires-Python: >=3.9

@@ -1,22 +1,44 @@
 """Dependency-free checks of geometry; not a real model/inference test."""
 import ast
 import math
+from dataclasses import dataclass, fields
 from pathlib import Path
 from types import SimpleNamespace as NS
+from typing import Optional
 import unittest
 
 source = Path(__file__).resolve().parents[1] / "src/pose/estimator.py"
 tree = ast.parse(source.read_text())
-# Load just the actual geometry and extraction definitions without vision packages.
-selected = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))
-            and n.name in {"crop_bounds", "PlayerPose"}]
-namespace = {"math": math}
-exec(compile(ast.Module(body=selected, type_ignores=[]), str(source), "exec"), namespace)
+
+# Exec the module WITHOUT the heavy vision imports (cv2 / mediapipe), which are
+# not installed in the plain test env. We keep every other top-level statement
+# -- including the ``from __future__``/typing/dataclasses imports and all the
+# geometry + overlap-mitigation helpers PlayerPose.extract depends on -- so the
+# real code paths run unchanged. numpy is stubbed because only _mask_others
+# touches it, and these geometry tests never pass an 'others' box.
+_HEAVY = {"cv2", "mediapipe", "mediapipe.tasks", "mediapipe.tasks.python"}
+
+
+def _is_heavy_import(node):
+    if isinstance(node, ast.Import):
+        return any(a.name.split(".")[0] in {"cv2", "mediapipe"} for a in node.names)
+    if isinstance(node, ast.ImportFrom):
+        return (node.module or "").split(".")[0] in {"cv2", "mediapipe"}
+    return False
+
+
+kept = [n for n in tree.body if not _is_heavy_import(n)]
+namespace = {"np": NS(), "cv2": NS(), "mp": NS()}
+exec(compile(ast.Module(body=kept, type_ignores=[]), str(source), "exec"), namespace)
 
 class Frame:
     shape = (100, 200, 3)
     def __getitem__(self, slices):
         self.slices = slices
+        return self
+    def copy(self):
+        # extract() copies the crop before (optional) masking; the stubbed
+        # cvtColor is identity, so returning self keeps the geometry checks valid.
         return self
 
 class GeometryTests(unittest.TestCase):

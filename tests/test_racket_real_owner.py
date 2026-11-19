@@ -13,8 +13,7 @@ from src.racket.mediapipe_model import spatial_loss
 from src.racket.real_owner_data import (FORMAT,SIDES,RealPairs,augment_pair,flatten_queries,
     real_ownership_loss,scene_bounds,selected_pose,summarize_real)
 from src.racket.real_owner_infer import RealOwnerRacketPredictor
-from src.racket.real_owner_train import checkpoint,verify,warm_model
-from src.racket.real_owner_package import apply_training_review
+from src.racket.real_owner_train import checkpoint,warm_model
 from src.racket.owner_model import SelectedPlayerFusion
 
 
@@ -133,36 +132,16 @@ class RealOwnershipTests(unittest.TestCase):
         self.assertAlmostEqual(result[0]['racket']['x'],xy[0],places=4)
         self.assertAlmostEqual(result[0]['racket']['y'],xy[1],places=4)
 
-    def test_checkpoint_format_and_manifest_leakage_checks(self):
+    def test_checkpoint_format_and_warm_loading(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'models').mkdir();path=root/'models/baseline_v002.pt'
             model=SelectedPlayerFusion();torch.save(dict(format='racket_owner_v002',body_names=BODY_NAMES,state_dict=model.state_dict()),path)
             warm=warm_model(path,torch.device('cpu'))
             self.assertTrue(torch.equal(warm.owner_gain,model.owner_gain))
             with self.assertRaises(ValueError):RealOwnerRacketPredictor(path)
-            a=self.record();b=copy.deepcopy(a);b.update(id='b',split='val',source_group='match02')
-            manifest=dict(version=FORMAT,body_names=BODY_NAMES,frames=[a,b],legacy_validation=[],
-                initial_checkpoint_sha256=sha(path),file_hashes={'models/baseline_v002.pt':sha(path)})
-            def save(): (root/'manifest.json').write_text(json.dumps(manifest))
-            save();self.assertEqual(len(verify(root)['frames']),2)
-            b['source_group']='match01';save()
-            with self.assertRaisesRegex(ValueError,'leakage'):verify(root)
-            b['source_group']='match02';b['players']['near_side']['target'][0]+=.1;save()
-            with self.assertRaisesRegex(ValueError,'transform'):verify(root)
             torch.save(checkpoint(model,dict(image_size=640,initial_checkpoint_sha256='test')),root/'new.pt')
             loaded=RealOwnerRacketPredictor(root/'new.pt');self.assertEqual(loaded.size,640)
 
-    def test_review_can_exclude_train_without_removing_validation(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);a=self.record();b=copy.deepcopy(a);b.update(id='b',split='val')
-            original=copy.deepcopy(a['players'])
-            manifest=dict(frames=[a,b],counts={},file_hashes={})
-            (root/'manifest.json').write_text(json.dumps(manifest))
-            audit=apply_training_review(root,{'a':'Wrong selected body in visual review'})
-            after=json.loads((root/'manifest.json').read_text())
-            self.assertEqual(audit[0]['id'],'a');self.assertEqual(after['counts']['train_eligible_frames'],0)
-            self.assertEqual(after['frames'][0]['players'],original);self.assertTrue(after['frames'][1]['train_eligible'])
-            with self.assertRaises(ValueError):apply_training_review(root,{'b':'cannot prune held-out denominator'})
 
 
 if __name__=='__main__':unittest.main()

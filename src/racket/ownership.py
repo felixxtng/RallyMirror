@@ -4,7 +4,6 @@ This workflow never writes the single-player annotation root. The new editor
 only has setters for the other point and per-player ownership boxes. Existing
 coordinates are hash-checked references, never editable fields in its output.
 """
-import argparse
 from collections import Counter
 import copy
 import json
@@ -352,40 +351,3 @@ def export(root, output):
         not_directly_a_v002_training_bundle=True)
     save_json(output/'export.json',report)
     return report
-
-
-def main():
-    p=argparse.ArgumentParser(description=__doc__);sub=p.add_subparsers(dest='command',required=True)
-    prep=sub.add_parser('prepare');prep.add_argument('--source',type=Path,default=Path('data/racket_manual'))
-    prep.add_argument('--root',type=Path,default=DEFAULT_ROOT);prep.add_argument('--bundle',type=Path,default=Path('outputs/racket_mediapipe/v002/bundle'))
-    prep.add_argument('--per-clip',type=int,default=50)
-    label=sub.add_parser('label');label.add_argument('--root',type=Path,default=DEFAULT_ROOT)
-    label.add_argument('--pilot',action='store_true',help='Balanced first batch, up to50 existing located frames per completed clip')
-    label.add_argument('--clip');label.add_argument('--frame',type=int,help='Open this original clip-local frame; requires --clip')
-    label.add_argument('--batch',type=Path,help='Curated training-only batch JSON; preserves previously reviewed work')
-    stat=sub.add_parser('status');stat.add_argument('--root',type=Path,default=DEFAULT_ROOT)
-    stat.add_argument('--batch',type=Path,help='Report only this curated training batch')
-    exp=sub.add_parser('export');exp.add_argument('--root',type=Path,default=DEFAULT_ROOT);exp.add_argument('--output',type=Path,required=True)
-    args=p.parse_args()
-    if args.command=='prepare':result=prepare(args.source,args.root,args.bundle,args.per_clip)
-    elif args.command=='status':
-        if args.batch:
-            from .ownership_batch import load_batch,batch_status
-            store=OwnershipStore(args.root);result=batch_status(store,load_batch(store,args.batch))
-        else:result=status(args.root)
-    elif args.command=='export':result=export(args.root,args.output)
-    else:
-        active_path=Path('data/racket_ownership_all_v005/manifest.json')
-        if active_path.is_file():
-            active=read_json(active_path)
-            previous=active.get('consolidation',{}).get('previous_dataset')
-            if previous and Path(args.root).resolve()==Path(previous).resolve():
-                p.error('The old pilot/curated pass is preserved and superseded. Continue the consolidated queue with: python -m src.racket.ownership_all label')
-        from .ownership_labeler import OwnershipLabeler
-        try:OwnershipLabeler(args.root,args.pilot,args.clip,args.frame,args.batch).run()
-        except ValueError as e:p.error(str(e))
-        return
-    print(json.dumps(result,indent=2))
-
-
-if __name__=='__main__':main()

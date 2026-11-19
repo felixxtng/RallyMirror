@@ -6,11 +6,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.racket.mediapipe_bundle import BODY_NAMES,pose_array,select_people,square_bounds,square_image,to_original,to_unit
-from src.racket.mediapipe_model import augment,decode,gaussian_maps,RacketPoseFusion,spatial_loss
-from src.racket.mediapipe_train import summarize
-from src.racket.mediapipe_train import verify_bundle
-from src.racket.mediapipe_bundle import VERSION,sha
+from src.racket.mediapipe_bundle import BODY_NAMES,pose_array,square_bounds,square_image,to_original,to_unit
+from src.racket.mediapipe_model import decode,gaussian_maps,RacketPoseFusion,spatial_loss
+from src.racket.legacy_validation import summarize
 
 
 class FusionTests(unittest.TestCase):
@@ -25,12 +23,6 @@ class FusionTests(unittest.TestCase):
         self.assertEqual(result.shape,(128,128,3))
         self.assertTrue(np.any(np.all(result==114,axis=2)))
 
-    def test_selection_is_independent_of_target_and_anonymous(self):
-        people=[dict(bbox=[100,20,150,200],confidence=.8),dict(bbox=[80,160,200,470],confidence=.8),
-                dict(bbox=[2,3,4,5],confidence=.99)]
-        selected=select_people(people,640,480)
-        self.assertEqual(selected[0]['bbox'],[80,160,200,470])
-        self.assertEqual(len(selected),2)
 
     def test_missing_pose_maps_are_zero_and_outside_landmarks_masked(self):
         pose=pose_array([dict(name='left_wrist',x=500,y=500,visibility=1.,presence=1.)],[0,0,100])
@@ -38,14 +30,6 @@ class FusionTests(unittest.TestCase):
         maps=gaussian_maps(torch.tensor([pose],dtype=torch.float32),32)
         self.assertEqual(float(maps.sum()),0.)
 
-    def test_augmentation_preserves_pose_target_alignment(self):
-        for seed in range(20):
-            pose=np.zeros((17,3),np.float32)
-            pose[0]=[.4,.6,1.]
-            image=np.zeros((128,128,3),np.uint8)
-            _,moved,target=augment(image,pose,np.array([.4,.6],np.float32),np.random.default_rng(seed))
-            np.testing.assert_allclose(moved[0,:2],target,atol=1e-6)
-            self.assertTrue(np.all((target>=0)&(target<1)))
 
     def test_misses_stay_in_metric_denominator(self):
         metrics=summarize([dict(error_original_pixels=10.),dict(error_original_pixels=80.),dict(error_original_pixels=None)])
@@ -73,34 +57,7 @@ class FusionTests(unittest.TestCase):
         self.assertGreater(float(model.head[-1].weight.grad.abs().sum()),0.)
         torch.testing.assert_close(before,model.encoder.bn1.running_mean)
 
-    def test_combined_adapter_preserves_body_box_and_landmark_list(self):
-        from types import SimpleNamespace
-        from src.racket.mediapipe_infer import CombinedPlayerPose
-        points=[dict(name=name,x=20,y=30) for name in BODY_NAMES]
-        adapter=CombinedPlayerPose.__new__(CombinedPlayerPose)
-        adapter.body=SimpleNamespace(extract=lambda frame,target:points)
-        adapter.racket=SimpleNamespace(predict=lambda frame,box,body:dict(name='head_center',x=42,y=50))
-        target=dict(player_id=7,bbox=[5,6,50,80])
-        result=adapter.extract(np.zeros((100,100,3),np.uint8),target)
-        self.assertIs(result['keypoints'],points)
-        self.assertEqual(result['bbox'],target['bbox'])
-        self.assertEqual(len(result['keypoints']),17)
-        self.assertNotIn('racket',target)
-        self.assertEqual(result['racket']['name'],'head_center')
 
-    def test_portable_verifier_rejects_corruption_and_match_leakage(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root=Path(temp);(root/'data.jpg').write_bytes(b'image')
-            manifest=dict(version=VERSION,body_names=BODY_NAMES,file_hashes={'data.jpg':sha(root/'data.jpg')},
-                samples=[dict(split='train',source_group='match01'),dict(split='val',source_group='match02')])
-            (root/'manifest.json').write_text(json.dumps(manifest))
-            verify_bundle(root)
-            (root/'data.jpg').write_bytes(b'corrupt')
-            with self.assertRaisesRegex(ValueError,'changed file'):verify_bundle(root)
-            manifest['file_hashes']['data.jpg']=sha(root/'data.jpg')
-            manifest['samples'][1]['source_group']='match01'
-            (root/'manifest.json').write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError,'leakage'):verify_bundle(root)
 
 
 if __name__=='__main__':unittest.main()

@@ -2,21 +2,15 @@
 
 The selected model is **v006, full-training epoch 4**. The runtime checkpoint
 is `models/racket_center_v006.pt`; `models/racket_v006.json` is its model card.
-The weights are supplied separately, not committed to Git.
+The selected weights are committed to Git. Cloning or pulling this branch
+includes the checkpoint; no separate model handoff or Runpod download is needed.
 
 ## Install and use
 
-Install the repository requirements in your project environment. Receive the
-selected checkpoint or extract the local `racket_v006_handoff.zip` into the
-repository root. The handoff contains the selected weights, model card and the
-frozen MediaPipe body asset. For a standalone checkpoint:
-
-```bash
-python scripts/install_racket_model.py /path/to/racket_center_real_owner_v006.pt
-```
-
-The installer checks the recorded SHA-256 and preserves a different existing
-model. The original Runpod checkpoint remains unchanged.
+Install the repository requirements in your project environment. Keep
+`models/racket_center_v006.pt` and the model card together. The test suite verifies
+the checkpoint size and SHA-256. MediaPipe's existing body asset remains at
+`models/pose_landmarker_lite.task`.
 
 Use the teammate's tracked player boxes and existing MediaPipe keypoints:
 
@@ -130,12 +124,14 @@ not full-video recall.
 - `src/racket/sampled_owner_{data,train,package}.py`: v006 masked training and bundle.
 - `scripts/build_racket_ownership_v006.py`: local package build using the
   preserved annotation datasets, v005 feature bundle and returned checkpoint.
-- `scripts/demo_racket_ownership_v006.py`: frozen-model rally16 comparison.
+- `scripts/demo_racket_ownership_v006.py`: frozen-model rally16 comparison; the historical checkpoint can be extracted from the preserved Runpod result ZIP.
 - `data/racket_ownership_sampled_v006/`: latest local annotation sidecars.
-- `Runpod/racket_ownership_v006/`: preserved uploaded/returned artifacts.
+- `Runpod/racket_ownership_v006.zip`: preserved self-contained training upload.
+- `Runpod/results/`: preserved result ZIPs and the latest extracted JSON reports.
 - `outputs/racket_ownership_v006_demo/`: local videos and verified result summary.
 
-Raw videos, local annotation versions, model assets, portable datasets, results,
-chat exports and archived experiments stay out of Git. Cloning the source alone
-does not download those assets. See the [training guide](racket_ownership_v006.md)
+The selected v006 checkpoint and model card are tracked. Raw videos, local
+annotation versions, other experimental checkpoints, portable datasets, results
+and chat exports stay out of Git. The historical Runpod ZIPs remain local; extracted
+old run copies and retired experiment code are removed during cleanup. See the [training guide](racket_ownership_v006.md)
 and [annotation controls](racket_sampled_full_review.md).

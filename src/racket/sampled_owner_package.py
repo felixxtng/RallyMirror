@@ -54,10 +54,14 @@ def build(repo, root, output, pose_extractor=None):
          'data/racket_ownership_sampled_v006', 'src/pose', 'src/detection', 'src/temporal', 'src/court', 'models')
         for p in (repo/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts}
     old_bundle = repo/'outputs/racket_ownership_v005/bundle'
+    if not (old_bundle/'manifest.json').is_file():
+        raise FileNotFoundError('Frozen v005 reproduction inputs are archived. Restore them using docs/racket_ownership_v006.md before rebuilding.')
     old = read_json(old_bundle/'manifest.json')
     old_by_id = {r['id']: r for r in old['frames']}
     returned = repo/'Runpod/racket_ownership_v005/racket_ownership_run_v005'
     warm = returned/'racket_center_real_owner_v005.pt'
+    if not warm.is_file():
+        raise FileNotFoundError('Frozen v005 warm-start is archived. Restore the result ZIP using docs/racket_ownership_v006.md before rebuilding.')
     protected[str(warm)] = file_hash(warm)
     output.mkdir(parents=True)
     save_json(output/'protected_snapshot.json', protected)
@@ -220,8 +224,8 @@ def finalize(repo, bundle, destination, guide):
     for folder in ('src', 'src/racket', 'src/pose'):
         (bundle/folder).mkdir(parents=True, exist_ok=True)
         (bundle/folder/'__init__.py').write_text('', encoding='utf-8')
-    modules = ('mediapipe_bundle', 'mediapipe_model', 'mediapipe_train', 'owner_model', 'owner_data',
-               'owner_train', 'player_constraint', 'real_owner_data', 'real_owner_train', 'real_owner_infer',
+    modules = ('mediapipe_bundle', 'mediapipe_model', 'owner_model', 'legacy_validation',
+               'real_owner_data', 'real_owner_train', 'real_owner_infer',
                'sampled_owner_data', 'sampled_owner_train')
     for module in modules:
         shutil.copyfile(repo/f'src/racket/{module}.py', bundle/f'src/racket/{module}.py')

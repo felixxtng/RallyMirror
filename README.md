@@ -19,23 +19,17 @@ The racket predictor adds a separate `racket` result to each supplied player.
 It preserves the existing player ID, bounding box and MediaPipe body keypoints.
 It does not automatically change court mapping or temporal features.
 
-Model weights and video/data artifacts stay outside Git. To install the selected
-checkpoint received separately:
-
-```bash
-python scripts/install_racket_model.py /path/to/racket_center_real_owner_v006.pt
-```
-
-The verified runtime checkpoint then lives at `models/racket_center_v006.pt`.
-Its hash, input format and validation results are recorded in
+The selected checkpoint is included in Git at `models/racket_center_v006.pt`.
+A normal clone or pull includes it; no separate handoff download is required.
+Its SHA-256, input format and validation results are recorded in
 [the model card](models/racket_v006.json). See the integration guide for the
 player input contract and working Python example.
 
-Original annotation versions, Runpod returns and generated videos remain local.
-Superseded experiment source, launchers and notes are preserved in the ignored
-`archives/racket_cleanup_2026-11-19/` folder. Historical data/model helpers still
-required by v006 remain in `src/racket/`; their filenames are not alternate
-recommended workflows.
+Raw videos, annotations and preserved Runpod returns remain local. Retired
+single-player models, synthetic-player training, old annotation interfaces and
+experiment launchers have been removed. The current annotation entry point is
+`python -m src.racket.ownership_fast label`; the training entry point is
+`python -m src.racket.sampled_owner_train`.
 
 Run the source checks from the repository root:
 

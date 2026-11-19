@@ -2,37 +2,23 @@ import copy
 import hashlib
 import json
 from pathlib import Path
-import tempfile
 import unittest
 
 import numpy as np
 import torch
 
-from scripts.install_racket_model import install
 from scripts.racket_demo_utils import predict_batch
 from src.racket.real_owner_infer import RealOwnerRacketPredictor
 
 
 class HandoffTests(unittest.TestCase):
-    def test_installer_checks_hash_is_idempotent_and_preserves_existing_models(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root/'received.pt'
-            source.write_bytes(b'selected-checkpoint')
-            card = root/'card.json'
-            card.write_text(json.dumps(dict(weights_sha256=hashlib.sha256(source.read_bytes()).hexdigest())))
-            destination = root/'models/runtime.pt'
-            self.assertEqual(install(source, card, destination), destination)
-            self.assertEqual(install(source, card, destination), destination)
-            self.assertEqual(source.read_bytes(), destination.read_bytes())
-            destination.write_bytes(b'different-model')
-            with self.assertRaises(FileExistsError):
-                install(source, card, destination)
-            self.assertEqual(destination.read_bytes(), b'different-model')
-            source.write_bytes(b'corrupted-upload')
-            with self.assertRaisesRegex(ValueError, 'model-card hash'):
-                install(source, card, destination)
-            self.assertEqual(destination.read_bytes(), b'different-model')
+    def test_committed_model_matches_recorded_sha256(self):
+        root = Path(__file__).resolve().parents[1]
+        card = json.loads((root/'models/racket_v006.json').read_text())
+        weights = root/card['weights_file']
+        self.assertEqual(weights.stat().st_size, card['weights_bytes'])
+        with weights.open('rb') as stream:
+            self.assertEqual(hashlib.sha256(stream.read()).hexdigest(), card['weights_sha256'])
 
     def test_demo_batch_helper_matches_runtime_for_multiple_and_missing_players(self):
         class Stub(torch.nn.Module):

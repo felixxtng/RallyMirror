@@ -6,7 +6,7 @@ import unittest
 import cv2
 import numpy as np
 
-from tests import test_racket_ownership_all as all_fixture
+from tests.racket_fixtures import ownership_history
 from src.racket.ownership import OwnershipStore
 from src.racket.ownership_fast import FORMAT, SIDES, SampleStore, court_coverage, export_labels, farthest_samples, initial_row, read_selected
 from src.racket.ownership_fast_labeler import FastLabeler
@@ -15,7 +15,7 @@ from src.racket.schema import file_hash, save_json, read_json
 
 class FastOwnershipTests(unittest.TestCase):
     def fixture(self, base):
-        source, previous, oldroot, before, _ = all_fixture.AllOwnershipTests().dataset(base)
+        source, previous, oldroot, before, _ = ownership_history(base)
         old = OwnershipStore(oldroot)
         tasks = [
             dict(id='train01_00002', clip='train01', frame=2, split='train', source_group='match01',

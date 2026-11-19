@@ -85,35 +85,3 @@ def image_tensor(image):
     rgb=image[:,:,::-1].copy().astype(np.float32)/255.
     rgb=(rgb-np.array([.485,.456,.406],np.float32))/np.array([.229,.224,.225],np.float32)
     return torch.from_numpy(rgb.transpose(2,0,1).copy())
-
-
-def augment(image,pose,target,rng):
-    """Apply identical geometry to pixels, body landmarks and racket target."""
-    import cv2
-    image=image.copy(); pose=pose.copy(); target=target.copy()
-    size=image.shape[0]
-    if rng.random()<.5:
-        image=np.ascontiguousarray(image[:,::-1])
-        edge=(size-1)/size
-        pose[:,0]=edge-pose[:,0];target[0]=edge-target[0]
-        # Swap anatomical left/right channels after mirroring.
-        swaps=[BODY_NAMES.index(name.replace('left_','right_')) if name.startswith('left_') else
-               BODY_NAMES.index(name.replace('right_','left_')) if name.startswith('right_') else i
-               for i,name in enumerate(BODY_NAMES)]
-        pose=pose[swaps]
-    matrix=cv2.getRotationMatrix2D((size/2,size/2),rng.uniform(-12,12),rng.uniform(.85,1.1))
-    matrix[:,2]+=rng.uniform(-.04,.04,2)*size
-    moved=np.append(target*size,1)@matrix.T/size
-    if np.all((moved>=.01)&(moved<=.99)):
-        image=cv2.warpAffine(image,matrix,(size,size),borderValue=(114,114,114))
-        pose[:,:2]=np.c_[pose[:,:2]*size,np.ones(len(pose))]@matrix.T/size
-        target=moved.astype(np.float32)
-    pose[:,2]*=((pose[:,0]>=0)&(pose[:,0]<1)&(pose[:,1]>=0)&(pose[:,1]<1))
-    # Training on small/downsampled images may help, but does not prove transfer
-    # to distant players; far-side clips remain explicitly unscored.
-    if rng.random()<.3:
-        small=int(size*rng.uniform(.35,.7))
-        image=cv2.resize(cv2.resize(image,(small,small)),(size,size))
-    image=np.clip(image.astype(np.float32)*rng.uniform(.8,1.2)+rng.uniform(-12,12),0,255).astype(np.uint8)
-    if rng.random()<.2: pose[:,2]=0 # image fallback when MediaPipe fails
-    return image,pose,target

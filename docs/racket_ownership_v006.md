@@ -71,3 +71,23 @@ are unchanged. Use the existing RealOwnerRacketPredictor with the resulting
 checkpoint; its saved input size and padding are loaded automatically.
 Higher resolution and more labels improve the experiment's prospects, but the
 80% result must be measured after training.
+
+## Rebuild from the preserved local history
+
+The selected v006 model is already tracked at `models/racket_center_v006.pt`.
+Inference does not require the old checkpoints or any training bundle.
+The existing `Runpod/racket_ownership_v006.zip` remains the complete reproducible
+training package. Cleanup removes extracted experiment duplicates.
+
+Only when rebuilding features from the local annotation versions, restore the
+frozen v005 inputs and returned warm-start from their preserved ZIPs first:
+
+```powershell
+python -m zipfile -e Runpod/racket_ownership_v005.zip outputs/racket_ownership_v005/bundle
+python -m zipfile -e Runpod/results/racket_ownership_run_v005_results.zip Runpod/racket_ownership_v005/racket_ownership_run_v005
+python scripts/build_racket_ownership_v006.py --output outputs/racket_ownership_v006_rebuild --package Runpod/racket_ownership_v006_rebuild.zip
+```
+
+The build script preserves existing builds and packages. Use fresh `--output`
+and `--package` paths instead of overwriting the preserved v006 upload.
+Raw clips and annotation sidecars are local prerequisites.

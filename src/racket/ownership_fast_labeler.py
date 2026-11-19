@@ -6,10 +6,22 @@ import numpy as np
 
 from .ownership import box_valid
 from .ownership_fast import SampleStore, SIDES, read_selected, steps
-from .ownership_labeler import screen_layout
 from .source import FrameSource
 
 COLORS = {'near_side': (255, 255, 0), 'far_side': (0, 255, 255)}
+
+
+def screen_layout():
+    """Fit image AND controls in the Windows work area (or a small fallback)."""
+    width,height=1280,720
+    try:
+        import ctypes
+        from ctypes import wintypes
+        rect=wintypes.RECT()
+        if ctypes.windll.user32.SystemParametersInfoW(0x30,0,ctypes.byref(rect),0):
+            width,height=rect.right-rect.left,rect.bottom-rect.top
+    except (AttributeError,OSError):pass
+    return min(960,max(600,width-80)),min(400,max(180,height-340))
 
 
 class FastLabeler:

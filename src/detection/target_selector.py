@@ -16,11 +16,7 @@ selection runs as an explicit filter *pipeline*:
       -> rank + take top N      (singles: both players -> N = 2)
 
 Each stage is independent and config-driven, so stages can be tuned (or turned
-off) without touching the others. The court-ROI stage is the real spectator
-fix; it depends on Person 3's court-coordinate detection, which is still WIP, so
-it ships here as a *pass-through seam*: provide a ``court_polygon`` and it
-filters on the bbox bottom-centre; omit it and the stage is a no-op. When
-Person 3 pushes, only ``_court_roi_filter`` / the polygon wiring changes.
+off) without touching the others.
 
 Defaults are intentionally permissive so dropping this in does not change
 current behaviour until the thresholds are tuned (suggestions 2-4). ``N`` still
@@ -69,7 +65,7 @@ class SelectionConfig:
     max_aspect_ratio: Optional[float] = None       # height / width, upper bound
 
     # (4) Court ROI. Two ways to supply it, checked in this order:
-    #   - court_roi: a CourtROI (metric-space filter via Person 3's homography).
+    #   - court_roi: a CourtROI (metric-space filter via court module homography).
     #     Preferred: correct under perspective, margin tunable in metres.
     #   - court_polygon: an image-space polygon of (x, y) points, as a fallback
     #     when no calibration/homography is available.
@@ -79,7 +75,7 @@ class SelectionConfig:
     court_polygon: Optional[Sequence[Point]] = None
 
     # On-court margin in metres for the metric ROI. Sourced from the shared
-    # ``court.bounds_margin_m`` so detection and Person 3's mapper agree on what
+    # ``court.bounds_margin_m`` so detection and court mapper agree on what
     # counts as "on court". Only used when a court_roi is built from a calibration.
     court_margin_m: float = 1.0
 
@@ -111,7 +107,7 @@ class SelectionConfig:
         if poly:
             overrides["court_polygon"] = [tuple(pt) for pt in poly]
 
-        # Share the on-court margin with Person 3's court mapper so both agree
+        # Share the on-court margin with the court mapper so both agree
         # on "on court". detection.target_selection may override it explicitly.
         if "court_margin_m" not in overrides:
             court_section = config.get("court") or {}
@@ -141,7 +137,7 @@ def bbox_bottom_centre(bbox: Sequence[float]) -> Point:
     """Return the bottom-centre point ``((x1 + x2) / 2, y2)`` of a bbox.
 
     This is the ground-contact proxy the court-ROI test uses: where the player
-    is standing, rather than where the whole box sits. Person 3's ROI filter
+    is standing, rather than where the whole box sits. The ROI filter
     keys off exactly this point.
     """
     x1, _y1, x2, y2 = bbox
@@ -289,7 +285,7 @@ def _court_roi_filter(
     safeguard. A track survives iff its bbox bottom-centre
     (``bbox_bottom_centre``) is on court.
 
-    Prefers the metric-space ``cfg.court_roi`` (Person 3's homography); falls
+    Prefers the metric-space ``cfg.court_roi`` (court homography); falls
     back to the image-space ``cfg.court_polygon``; with neither set this stage
     is a pass-through.
     """

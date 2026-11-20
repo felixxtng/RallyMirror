@@ -53,7 +53,7 @@ detection:
     max_aspect_ratio: null    # arms-raised poses can be very tall; leave open
 
     # (4) Court ROI polygon (image coords) + stickiness are future work, wired
-    # once Person 3's court detection lands and ID assignment is understood.
+    # once court detection lands and ID assignment is understood.
     # court_polygon: null
 
 # Court-space mapping settings (read by src/court/mapper.py; missing keys use defaults).

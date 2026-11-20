@@ -28,7 +28,16 @@ def _selection_with_court(calibration_path):
 
 
 def run_demo(video_path, model_path, output_path, data_path, threshold=0.5,
-             max_frames=None, calibration_path=None):
+             max_frames=None, calibration_path=None, racket_weights=None,
+             racket_device="cpu"):
+    """Run detection + MediaPipe pose, optionally appending a racket keypoint.
+
+    When ``racket_weights`` is given, a :class:`RacketKeypointAnnotator` runs
+    once per frame AFTER body pose and appends a ``racket_center`` keypoint to
+    each player's ``keypoints`` (last position). This is what produces the
+    18-keypoint pose.jsonl a racket-aware temporal model trains on. Without it
+    the output is the original 17 body keypoints, unchanged.
+    """
     video = cv2.VideoCapture(str(video_path))
     if not video.isOpened():
         raise ValueError(f"Could not open video: {video_path}")
@@ -47,6 +56,13 @@ def run_demo(video_path, model_path, output_path, data_path, threshold=0.5,
     pose = PlayerPose(model_path, OverlapConfig.from_config())
     tracker = PlayerTracker()
     selection_config = _selection_with_court(calibration_path)
+    racket_annotator = None
+    if racket_weights:
+        # Imported lazily so the default (no-racket) path stays torch-free here.
+        from src.racket.pose_integration import RacketKeypointAnnotator
+
+        racket_annotator = RacketKeypointAnnotator(racket_weights, device=racket_device)
+        print(f"[pose-demo] racket keypoint active from {racket_weights}")
     frame_size = (width, height)
     detected_frames = 0
     names = set()
@@ -63,32 +79,48 @@ def run_demo(video_path, model_path, output_path, data_path, threshold=0.5,
             # selected player and emit one record per player per frame.
             targets = select_targets(tracker.track_people(frame), selection_config,
                                      frame_size)
-            frame_keypoints = 0
-            frame_had_pose = False
+
+            # Pass 1: body pose per player. Collect the players that got a pose;
+            # the racket model (if enabled) needs ALL of them for one frame at
+            # once (shared scene crop, per-player cross-validation), so defer
+            # drawing and recording until after the racket pass.
+            players = []
             for idx, target in enumerate(targets):
                 # Pass the OTHER selected players so the estimator can mask /
                 # tighten / validate against overlap.
                 others = [t["bbox"] for j, t in enumerate(targets) if j != idx]
                 points = pose.extract(frame, target, others)
-                if points:
-                    frame_had_pose = True
-                    frame_keypoints += len(points)
-                    names.update(point["name"] for point in points)
-                    draw_pose(frame, points, threshold)
-
                 x1, y1, x2, y2 = map(round, target["bbox"])
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 180, 0), 2)
-
                 if points:
-                    tracking_data.append({
-                        "frame": frame_number,
+                    players.append({
                         "player_id": target["track_id"],
                         "bbox": target["bbox"],
                         "confidence": target["confidence"],
                         "keypoints": points,
                     })
 
-            if frame_had_pose:
+            # Pass 2 (optional): append the racket_center keypoint to every
+            # player that got a body pose this frame.
+            if racket_annotator is not None and players:
+                players = racket_annotator.annotate(frame, players)
+
+            # Pass 3: draw + record using the (possibly racket-augmented) points.
+            frame_keypoints = 0
+            for player in players:
+                points = player["keypoints"]
+                frame_keypoints += len(points)
+                names.update(point["name"] for point in points)
+                draw_pose(frame, points, threshold)
+                tracking_data.append({
+                    "frame": frame_number,
+                    "player_id": player["player_id"],
+                    "bbox": player["bbox"],
+                    "confidence": player["confidence"],
+                    "keypoints": points,
+                })
+
+            if players:
                 detected_frames += 1
 
             cv2.putText(
@@ -133,9 +165,16 @@ def main():
     )
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--max-frames", type=int)
+    parser.add_argument(
+        "--racket-weights", type=Path, default=None,
+        help="racket ownership checkpoint; when given, append a racket_center "
+             "keypoint per player (produces an 18-keypoint pose.jsonl)")
+    parser.add_argument("--racket-device", default="cpu")
     args = parser.parse_args()
     run_demo(args.video, args.model, args.output, args.data, args.threshold, args.max_frames,
-             args.calibration if args.calibration.exists() else None)
+             args.calibration if args.calibration and args.calibration.exists() else None,
+             racket_weights=str(args.racket_weights) if args.racket_weights else None,
+             racket_device=args.racket_device)
 
 if __name__ == "__main__":
     main()

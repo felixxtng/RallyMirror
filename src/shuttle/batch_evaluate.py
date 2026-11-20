@@ -158,7 +158,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rallies', nargs='+', default=['rally18', 'rally24', 'rally35', 'rally44'])
     parser.add_argument('--root', type=Path, default=Path('data/shuttle'))
-    parser.add_argument('--weights', type=Path, default=Path('outputs/shuttle_v2/best.pt'))
+    parser.add_argument('--weights', type=Path, default=Path('models/shuttle_full_b8/best.pt'))
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--device', choices=['auto', 'cpu', 'mps', 'cuda'], default='auto')
     args = parser.parse_args()

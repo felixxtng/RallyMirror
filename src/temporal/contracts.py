@@ -49,6 +49,16 @@ from typing import Any, Dict, Iterable, Iterator, List
 # is the single source of truth for the surviving keypoints *in the order the
 # estimator outputs them*. Everything downstream derives from it, so if the
 # estimator's subset changes again, only this list needs updating here.
+#
+# The final entry, ``racket_center``, is NOT a MediaPipe body landmark: it is
+# appended per player by the racket ownership model
+# (src/racket/pose_integration.py), after body pose, so it is always LAST.
+# Keep this name in lockstep with
+# ``src.racket.pose_integration.RACKET_KEYPOINT_NAME``. Adding it here is what
+# makes the point survive ``select_keypoints_by_name`` and enter the temporal
+# feature vector -- which changes NUM_KEYPOINTS and therefore the model's input
+# width, so a racket-aware model must be retrained (an old 17-keypoint
+# checkpoint is incompatible).
 KEYPOINT_NAMES = [
     "nose",
     "left_shoulder", "right_shoulder",
@@ -59,9 +69,10 @@ KEYPOINT_NAMES = [
     "left_ankle", "right_ankle",
     "left_heel", "right_heel",
     "left_foot_index", "right_foot_index",
+    "racket_center",
 ]
 
-NUM_KEYPOINTS = len(KEYPOINT_NAMES)  # derived, currently 17
+NUM_KEYPOINTS = len(KEYPOINT_NAMES)  # derived, currently 18 (17 body + racket)
 
 # Wrist positions WITHIN the reduced layout (used as a swing signal by the stub
 # and the rule-based classifier). Derived from the names so they never drift
@@ -170,7 +181,7 @@ def _keypoint_coords(kp: Any, index: int) -> tuple[float, float]:
     return float(x), float(y)
 
 
-# Court-space normalization. Person 3's mapper emits ``court_xy`` in METRES on a
+# Court-space normalization. The court mapper emits ``court_xy`` in METRES on a
 # BWF court (x across 0..6.10, y along 0..13.40). To make court position
 # commensurate with the bbox-normalized keypoints (both ~[0, 1]) before they are
 # concatenated into one feature vector, court metres are divided by the court

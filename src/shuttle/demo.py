@@ -161,7 +161,7 @@ def run_demo(video_path, weights, output_dir, threshold=0.5, device="auto",
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("video", type=Path)
-    parser.add_argument("--weights", type=Path, default=Path("outputs/shuttle/best.pt"))
+    parser.add_argument("--weights", type=Path, default=Path("models/shuttle_full_b8/best.pt"))
     parser.add_argument("--output", type=Path, default=Path("outputs/shuttle_demo"))
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--device", choices=["auto", "cpu", "mps", "cuda"], default="auto")

@@ -175,7 +175,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=DEFAULT_ROOT)
     parser.add_argument('--split-manifest', type=Path, help='Overrides meta.split; default auto-detected for the canonical clip root')
-    parser.add_argument('--output', type=Path, default=Path('outputs/shuttle'))
+    parser.add_argument('--output', type=Path, default=Path('models/shuttle'))
     parser.add_argument('--epochs', type=int, default=40, help='Total target epochs, including completed epochs on resume')
     source = parser.add_mutually_exclusive_group()
     source.add_argument('--init-weights', type=Path, help='Model-only initialization; fresh Adam/scheduler/history')

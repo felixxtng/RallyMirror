@@ -1,4 +1,4 @@
-"""Phase-recognition demo (Person 4).
+"""Phase-recognition demo.
 
 Drives the temporal :class:`PhasePipeline` end-to-end and produces:
 

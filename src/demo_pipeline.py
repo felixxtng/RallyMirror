@@ -3,8 +3,7 @@ Pipeline for converting an input rally video (or an array of videos) into
 data suitable for the TCN Phase classifier model to train on.
 
 Retrieves the following data from each rally video, where possible:
-- (Not added for now, maybe for completely new data?) Video metadata (data/shuttle/clips/[video]/meta.json)
-- (Not added for now, maybe for completely new data?) Shuttle coordinates .csv (data/shuttle/clips/[video]/labels.csv)
+- Shuttle coordinates .csv (data/shuttle/clips/[video]/labels.csv)
 - Player bounding boxes and keypoint coordinates JSON (data/shuttle/clips/[video]/pose.jsonl)
 - Court calibration JSON (data/shuttle/clips/[video]_court-calibration.json)
 - (OPTIONAL) Preview image showing court module's predicted keypoints (outputs/court_pred)
@@ -60,7 +59,7 @@ from src.pose.demo import run_demo as run_pose_demo
 # Identity canonicalization (fragmented tracker ids -> stable slots)
 from src.detection.canonicalize import canonicalize_file
 
-# Court-space mapping (foot pixel -> court metres) via Person 3's mapper
+# Court-space mapping (foot pixel -> court metres) via court mapper
 from src.court.mapper import map_jsonl, load_config as load_court_config
 
 # Shuttle rally-state signal (smoothed shuttle speed + validity per frame)
@@ -154,9 +153,15 @@ def _existing_loo(calib_path):
 
 
 def get_pose_data(video, video_path, calibration_path, save_preview_video=True,
-                  threshold=0.5, max_frames=None, overwrite=False):
+                  threshold=0.5, max_frames=None, overwrite=False,
+                  racket_weights=None, racket_device="cpu"):
     """Stage 2. Run detection+pose (with the court ROI if a calibration exists)
     and write data/shuttle/clips/<video>/pose.jsonl. Returns its path.
+
+    When ``racket_weights`` is given, each pose record carries an extra
+    ``racket_center`` keypoint (18 keypoints total) for a racket-aware temporal
+    model. A model trained on 17-keypoint data is incompatible with 18-keypoint
+    pose.jsonl and vice versa, so regenerate the whole dataset when switching.
     """
     data_path = pose_path_for(video)
     if data_path.exists() and not overwrite:
@@ -170,6 +175,7 @@ def get_pose_data(video, video_path, calibration_path, save_preview_video=True,
         video_path, POSE_MODEL, preview, data_path,
         threshold=threshold, max_frames=max_frames,
         calibration_path=str(calibration_path) if calibration_path else None,
+        racket_weights=racket_weights, racket_device=racket_device,
     )
     if not save_preview_video:
         preview.unlink(missing_ok=True)
@@ -206,7 +212,7 @@ def canonicalize_pose(video, video_path, pose_path, calibration_path):
 
 def map_court_coords(video, pose_path, calibration_path):
     """Stage 4. Add court-space fields (``court_xy`` metres, ``in_bounds``, ...)
-    to each pose.jsonl record via Person 3's mapper, rewriting in place.
+    to each pose.jsonl record via court mapper, rewriting in place.
 
     This is what makes the temporal court feature (train.py ``--court``)
     trainable: ``court_xy`` is read from these records. Needs a calibration;
@@ -336,7 +342,8 @@ def process_video(video, model, names, device, args):
         pose_path = get_pose_data(
             video, video_path, calibration_path,
             save_preview_video=not args.no_preview_video,
-            max_frames=args.max_frames, overwrite=args.overwrite)
+            max_frames=args.max_frames, overwrite=args.overwrite,
+            racket_weights=args.racket_weights, racket_device=args.racket_device)
     else:
         print(f"  [pose] skipped (using {pose_path})")
 
@@ -442,6 +449,13 @@ def main():
                              "the temporal --shuttle feature needs this stage")
     parser.add_argument("--shuttle-span", type=int, default=DEFAULT_SMOOTHING_SPAN,
                         help="smoothing span (frames) for shuttle speed")
+    parser.add_argument("--racket-weights", default=None,
+                        help="racket ownership checkpoint (e.g. "
+                             "models/racket_center_v006.pt); when given, pose.jsonl "
+                             "gains a racket_center keypoint (18 total) for a "
+                             "racket-aware temporal model. Regenerate ALL clips "
+                             "with --overwrite when switching 17<->18 keypoints")
+    parser.add_argument("--racket-device", default="cpu")
     parser.add_argument("--overwrite", action="store_true",
                         help="recompute court/pose even if their outputs exist")
     parser.add_argument("--no-overlay", action="store_true", help="skip court overlay image")
@@ -452,8 +466,8 @@ def main():
     args = parser.parse_args()
 
     videos = args.videos or [
-        "rally11", "rally12", "rally13", "rally14", "rally15",
-        "rally16", "rally17", "rally18", "rally19", "rally20"
+        "rally41", "rally42", "rally43", "rally44", "rally45",
+        "rally46", "rally47", "rally48"
     ]
 
     device = (("cuda" if torch.cuda.is_available() else "cpu")

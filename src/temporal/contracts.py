@@ -80,6 +80,15 @@ NUM_KEYPOINTS = len(KEYPOINT_NAMES)  # derived, currently 18 (17 body + racket)
 LEFT_WRIST = KEYPOINT_NAMES.index("left_wrist")    # -> 5 in the reduced layout
 RIGHT_WRIST = KEYPOINT_NAMES.index("right_wrist")  # -> 6 in the reduced layout
 
+# The racket point sits at a fixed index (last in canonical order). Unlike body
+# joints, a racket legitimately reaches far outside the player's bbox (a raised
+# smash/clear), so bbox-relative coords routinely exceed the [-0.5, 1.5] margin
+# the range check uses for body keypoints. The check is therefore SKIPPED for
+# this index (finiteness is still enforced) so these frames -- exactly the
+# dynamic stroke moments -- are not dropped. Re-enable the range check here if a
+# noisy racket prediction starts injecting wild coordinates.
+RACKET_INDEX = KEYPOINT_NAMES.index("racket_center")  # -> 17, the last keypoint
+
 class ContractError(ValueError):
     """Raised when an upstream record violates a required part of the contract."""
 
@@ -143,7 +152,18 @@ def validate_pose_record(record: Dict[str, Any]) -> Dict[str, Any]:
             f"got {len(kps) if isinstance(kps, (list, tuple)) else type(kps).__name__}"
         )
     for i, kp in enumerate(kps):
-        x, y = _keypoint_coords(kp, i)
+        x, y = _keypoint_coords(kp, i)  # also enforces x, y are finite numbers
+        # The racket point can sit far outside the bbox (see RACKET_INDEX); skip
+        # the range check for it. Body keypoints stay strict -- an out-of-range
+        # body joint still signals a bad/merged pose worth dropping. Still reject
+        # a non-finite racket coord: the range check used to catch NaN/inf for
+        # free (comparisons with NaN are False), so guard it explicitly here now
+        # that the range check is skipped, or it would poison the feature vector.
+        if i == RACKET_INDEX:
+            if not (math.isfinite(x) and math.isfinite(y)):
+                raise ContractError(
+                    f"racket keypoint {i} = ({x}, {y}) is not finite")
+            continue
         # Normalized to bbox: expect roughly [0, 1]. Allow a small margin for
         # points that fall just outside the box.
         if not (-0.5 <= x <= 1.5 and -0.5 <= y <= 1.5):

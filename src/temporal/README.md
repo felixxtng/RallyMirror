@@ -52,7 +52,6 @@ reasons over.
 | `windower.py` | Buffers per-frame features into fixed windows, per `player_id`, resets on gaps |
 | `classifier.py` | `PhaseClassifier` interface; `RuleBasedClassifier` (now), `TrainableClassifier` (future seam) |
 | `pipeline.py` | `PhasePipeline` — the public API: `process(pose_record) -> (frame, player_id, phase)` |
-| `demo_phase.py` | End-to-end demo: writes a phase JSONL and (if OpenCV present) an overlay video |
 
 ## Phases
 

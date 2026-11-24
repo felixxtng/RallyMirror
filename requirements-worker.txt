@@ -1,0 +1,14 @@
+# Candidate Linux GPU runtime. Verify container smoke test before promotion.
+-r requirements-api.txt
+runpod==1.12.0
+ultralytics==8.4.174
+mediapipe==1.1.0
+numpy==2.5.3
+# Both upstream libraries require an OpenCV distribution. Keep their native
+# bindings on the same version rather than adding a third headless wheel.
+opencv-python==5.0.0.93
+opencv-contrib-python==5.0.0.93
+pandas>=2.2,<4
+matplotlib>=3.9,<4
+PyYAML==6.0.3
+lap>=0.5.12,<1

@@ -1,0 +1,7 @@
+# CPU web/API only; no ML packages on Render.
+fastapi==0.165.0
+uvicorn==0.54.0
+SQLAlchemy==2.1.9
+psycopg[binary]==3.3.9
+boto3==1.44.10
+httpx==0.28.1

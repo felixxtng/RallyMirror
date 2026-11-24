@@ -87,7 +87,9 @@ def render_refined_video(video_path, output_video, frames, refined, fps, width, 
 
 
 def run_offline_demo(video_path, weights, output_dir, threshold=.5, device='auto',
-                     config=None, candidate_cache=None, comparison_video=False):
+                     config=None, candidate_cache=None, comparison_video=False, render_video=True):
+    if comparison_video and not render_video:
+        raise ValueError("comparison_video requires render_video")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     names = ['shuttle_demo.mp4', 'shuttle_tracking.jsonl', 'shuttle_metadata.json',
@@ -167,7 +169,8 @@ def run_offline_demo(video_path, weights, output_dir, threshold=.5, device='auto
             if detection:
                 row.update(detection)
             file.write(json.dumps(row, allow_nan=False)+'\n')
-    render_refined_video(video_path, output_dir/'shuttle_demo.mp4', frames, refined,
-                         fps, width, height,
-                         output_dir/'shuttle_comparison.mp4' if comparison_video else None)
+    if render_video:
+        render_refined_video(video_path, output_dir/'shuttle_demo.mp4', frames, refined,
+                             fps, width, height,
+                             output_dir/'shuttle_comparison.mp4' if comparison_video else None)
     print(f'Saved offline outputs in {output_dir}', flush=True)

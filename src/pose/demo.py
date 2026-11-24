@@ -29,7 +29,7 @@ def _selection_with_court(calibration_path):
 
 def run_demo(video_path, model_path, output_path, data_path, threshold=0.5,
              max_frames=None, calibration_path=None, racket_weights=None,
-             racket_device="cpu"):
+             racket_device="cpu", tracker_device=None):
     """Run detection + MediaPipe pose, optionally appending a racket keypoint.
 
     When ``racket_weights`` is given, a :class:`RacketKeypointAnnotator` runs
@@ -45,16 +45,19 @@ def run_demo(video_path, model_path, output_path, data_path, threshold=0.5,
     fps = video.get(cv2.CAP_PROP_FPS)
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output = cv2.VideoWriter(
-        str(output_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
-    )
-    if not output.isOpened():
-        video.release()
-        raise OSError(f"Could not create output video: {output_path}")
+    output = None
+    if output_path is not None:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output = cv2.VideoWriter(
+            str(output_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
+        )
+        if not output.isOpened():
+            video.release()
+            raise OSError(f"Could not create output video: {output_path}")
 
     pose = PlayerPose(model_path, OverlapConfig.from_config())
-    tracker = PlayerTracker()
+    tracker = PlayerTracker(device=tracker_device)
     selection_config = _selection_with_court(calibration_path)
     racket_annotator = None
     if racket_weights:
@@ -67,7 +70,10 @@ def run_demo(video_path, model_path, output_path, data_path, threshold=0.5,
     detected_frames = 0
     names = set()
     frame_number = 0
-    tracking_data = []
+    Path(data_path).parent.mkdir(parents=True, exist_ok=True)
+    partial_path = Path(str(data_path) + ".partial")
+    records = partial_path.open("w", encoding="utf-8")
+    completed = False
 
     try:
         while max_frames is None or frame_number < max_frames:
@@ -90,8 +96,6 @@ def run_demo(video_path, model_path, output_path, data_path, threshold=0.5,
                 # tighten / validate against overlap.
                 others = [t["bbox"] for j, t in enumerate(targets) if j != idx]
                 points = pose.extract(frame, target, others)
-                x1, y1, x2, y2 = map(round, target["bbox"])
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 180, 0), 2)
                 if points:
                     players.append({
                         "player_id": target["track_id"],
@@ -111,38 +115,42 @@ def run_demo(video_path, model_path, output_path, data_path, threshold=0.5,
                 points = player["keypoints"]
                 frame_keypoints += len(points)
                 names.update(point["name"] for point in points)
-                draw_pose(frame, points, threshold)
-                tracking_data.append({
+                if output is not None:
+                    draw_pose(frame, points, threshold)
+                records.write(json.dumps({
                     "frame": frame_number,
                     "player_id": player["player_id"],
                     "bbox": player["bbox"],
                     "confidence": player["confidence"],
                     "keypoints": points,
-                })
+                }) + "\n")
 
             if players:
                 detected_frames += 1
 
-            cv2.putText(
-                frame, f"Tracked pose: {frame_keypoints} keypoints", (20, 35),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2,
-            )
-
-            output.write(frame)
+            if output is not None:
+                # Draw only AFTER all models have consumed the untouched frame.
+                for target in targets:
+                    x1, y1, x2, y2 = map(round, target["bbox"])
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 180, 0), 2)
+                cv2.putText(frame, f"Tracked pose: {frame_keypoints} keypoints", (20, 35),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                output.write(frame)
             frame_number += 1
 
+        if frame_number == 0:
+            raise ValueError(f"Video contains no readable frames: {video_path}")
+        completed = True
     finally:
+        records.close()
+        if not completed:
+            partial_path.unlink(missing_ok=True)
         pose.close()
         video.release()
-        output.release()
+        if output is not None:
+            output.release()
 
-    Path(data_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(data_path, "w") as file:
-        for item in tracking_data:
-            file.write(json.dumps(item) + "\n")
-
-    if frame_number == 0:
-        raise ValueError(f"Video contains no readable frames: {video_path}")
+    partial_path.replace(data_path)
 
     print(f"Processed {frame_number} frames; pose detected in {detected_frames}")
     print(f"Returned keypoints ({len(names)}): {', '.join(sorted(names)) or 'none'}")

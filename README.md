@@ -3,6 +3,7 @@
 Badminton player tracking, body pose, racket-centre prediction and temporal
 phase recognition.
 
+- [Local website and cloud deployment setup](docs/deployment.md)
 - [Shuttle annotations and training](docs/shuttle_training.md)
 - [Temporal phase-recognition interface](src/temporal/README.md)
 - [Racket model integration and results](docs/racket_integration.md)

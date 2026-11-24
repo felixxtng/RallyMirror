@@ -71,7 +71,7 @@ VIDEO_DIR = Path("data/videos")
 CALIB_OVERLAY_DIR = Path("outputs/court_pred")
 CLIPS_DIR = Path("data/shuttle/clips")
 # PREVIEW_VIDEO_DIR = Path("outputs/videos")
-PREVIEW_VIDEO_DIR = Path("C:/Users/tayru/Downloads/RallyMirror-outputs")
+PREVIEW_VIDEO_DIR = Path("outputs/videos")
 POSE_MODEL = Path("models/pose_landmarker_lite.task")
 COURT_CHECKPOINT = Path("models/court_final.pt")
 
@@ -90,7 +90,7 @@ def pose_path_for(video):
 
 def get_court_calibration(video, video_path, model, names, device,
                           frames=15, conf=0.3, save_overlay=True, overwrite=False,
-                          loo_gate_m=DEFAULT_LOO_GATE_M, write=True):
+                          loo_gate_m=DEFAULT_LOO_GATE_M, write=True, output_path=None):
     """Stage 1. Predict a court calibration JSON.
 
     Returns ``(calibration_path_or_None, court_info)`` where ``court_info`` is a
@@ -105,7 +105,7 @@ def get_court_calibration(video, video_path, model, names, device,
     ``write`` is False (dry-run) nothing is saved, but the fit + gate still run
     so the report reflects what would happen.
     """
-    out_path = calib_path_for(video)
+    out_path = Path(output_path) if output_path else calib_path_for(video)
     if out_path.exists() and not overwrite:
         loo = _existing_loo(out_path)
         print(f"  [court] using existing {out_path} (loo_mean_m={loo})")
@@ -154,7 +154,7 @@ def _existing_loo(calib_path):
 
 def get_pose_data(video, video_path, calibration_path, save_preview_video=True,
                   threshold=0.5, max_frames=None, overwrite=False,
-                  racket_weights=None, racket_device="cpu"):
+                  racket_weights=None, racket_device="cpu", output_path=None, tracker_device=None):
     """Stage 2. Run detection+pose (with the court ROI if a calibration exists)
     and write data/shuttle/clips/<video>/pose.jsonl. Returns its path.
 
@@ -163,22 +163,19 @@ def get_pose_data(video, video_path, calibration_path, save_preview_video=True,
     model. A model trained on 17-keypoint data is incompatible with 18-keypoint
     pose.jsonl and vice versa, so regenerate the whole dataset when switching.
     """
-    data_path = pose_path_for(video)
+    data_path = Path(output_path) if output_path else pose_path_for(video)
     if data_path.exists() and not overwrite:
         print(f"  [pose] using existing {data_path}")
         return data_path
 
-    # run_demo always writes a preview video; point it somewhere real.
-    preview = PREVIEW_VIDEO_DIR / f"{video}_tracked.mp4"
-    preview.parent.mkdir(parents=True, exist_ok=True)
+    # Headless callers skip both drawing and the intermediate video encoder.
+    preview = PREVIEW_VIDEO_DIR / f"{video}_tracked.mp4" if save_preview_video else None
     run_pose_demo(
         video_path, POSE_MODEL, preview, data_path,
         threshold=threshold, max_frames=max_frames,
         calibration_path=str(calibration_path) if calibration_path else None,
-        racket_weights=racket_weights, racket_device=racket_device,
+        racket_weights=racket_weights, racket_device=racket_device, tracker_device=tracker_device,
     )
-    if not save_preview_video:
-        preview.unlink(missing_ok=True)
     return data_path
 
 

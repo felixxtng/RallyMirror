@@ -18,7 +18,7 @@ paths:
   # Demo + intermediate artifacts.
   outputs: outputs
   # YOLO weights used by the player tracker.
-  yolo_weights: yolo11n.pt
+  yolo_weights: models/yolo11n.pt
 
 video:
   # BFMD convention we align to for portability (see schema reference note).

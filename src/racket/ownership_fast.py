@@ -247,7 +247,7 @@ def proposed_bodies(candidates, w, h):
 
 
 def prepare(output=ROOT, total=1000, source=Path('data/racket_manual'),
-            previous=Path('data/racket_ownership_all_v005'), weights=Path('yolo11n.pt')):
+            previous=Path('data/racket_ownership_all_v005'), weights=Path('models/yolo11n.pt')):
     source, output = separate(source, output)
     previous, _ = separate(previous, output)
     if output.exists():

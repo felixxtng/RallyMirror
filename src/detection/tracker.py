@@ -2,7 +2,7 @@ from ultralytics import YOLO
 
 
 class PlayerTracker:
-    def __init__(self, model_name="yolo11n.pt", device=None):
+    def __init__(self, model_name="models/yolo11n.pt", device=None):
         self.model = YOLO(model_name)
         self.device = device
 

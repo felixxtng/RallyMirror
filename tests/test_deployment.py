@@ -135,18 +135,42 @@ def test_keys_cannot_escape_workspace():
             key(job_id, name)
 
 
-def test_input_validation_preserves_trained_resolution(tmp_path):
+def test_input_validation_reports_source_size_and_still_guards_duration(tmp_path):
     import cv2
     import numpy as np
     path = tmp_path / "video.mp4"
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 30, (1280,720))
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 30, (1280, 720))
     for _ in range(3):
-        writer.write(np.zeros((720,1280,3), dtype=np.uint8))
+        writer.write(np.zeros((720, 1280, 3), dtype=np.uint8))
     writer.release()
     info = inspect_video(path)
-    assert info["fps"] == 30 and info["width"] == 1280
+    # inspect_video now reports the SOURCE size (resolution is no longer a gate;
+    # normalize_video resizes to 1280x720 downstream) but keeps the fps/duration guard.
+    assert info["fps"] == 30
+    assert info["source_width"] == 1280 and info["source_height"] == 720
     with pytest.raises(ValueError, match="at most"):
         inspect_video(path, max_seconds=.01)
+
+
+def test_non_standard_resolution_is_accepted_and_normalized(tmp_path):
+    import cv2
+    import numpy as np
+    from src.deployment.pipeline import normalize_video, TARGET_WIDTH, TARGET_HEIGHT
+    src = tmp_path / "small.mp4"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"mp4v"), 30, (640, 480))
+    for _ in range(3):
+        writer.write(np.zeros((480, 640, 3), dtype=np.uint8))
+    writer.release()
+    # A non-1280x720 clip is NOT rejected by inspect_video ...
+    info = inspect_video(src)
+    assert (info["source_width"], info["source_height"]) == (640, 480)
+    # ... and normalize_video brings it onto the model's canvas.
+    out = normalize_video(src, tmp_path / "norm.mp4")
+    cap = cv2.VideoCapture(str(out))
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+    assert (w, h) == (TARGET_WIDTH, TARGET_HEIGHT)
 
 
 def test_gpu_handler_uploads_results_even_when_completion_callback_is_lost(tmp_path, monkeypatch):

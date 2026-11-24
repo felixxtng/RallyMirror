@@ -93,13 +93,13 @@ def main():
     if file_hash(meta['source']) != meta['source_hash']:
         raise ValueError('Source video changed')
     protected = {str(p): file_hash(p) for p in
-                 [args.old_weights, args.weights, REPO/'yolo11n.pt', REPO/'models/pose_landmarker_lite.task']}
+                 [args.old_weights, args.weights, REPO/'models/yolo11n.pt', REPO/'models/pose_landmarker_lite.task']}
     protected.update({str(p): file_hash(p) for folder in ['src/detection', 'src/pose', 'src/temporal', 'src/court']
                       for p in (REPO/folder).rglob('*.py')})
     old = RealOwnerRacketPredictor(args.old_weights)
     new = RealOwnerRacketPredictor(args.weights)
     source = FrameSource(meta)
-    detector = PlayerDetector(str(REPO/'yolo11n.pt'))
+    detector = PlayerDetector(str(REPO/'models/yolo11n.pt'))
     body = PlayerPose(REPO/'models/pose_landmarker_lite.task')
     # Visible court geometry for this demonstration only; no racket labels.
     # This polygon is not the teammates' court-coordinate mapping.

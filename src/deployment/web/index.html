@@ -7,7 +7,7 @@
 <h1>RallyMirror</h1><p>Upload a rally clip and retrieve one video with court, player, pose, racket, shuttle and phase overlays.</p>
 <form id="form"><label>Team access key (leave blank for an unrestricted local server)<input id="access" type="password" autocomplete="off"></label>
 <label>Raw MP4 video <input id="file" type="file" accept="video/mp4,.mp4" required></label>
-<p><small>1280 ? 720 ? 1?60 fps ? up to 60 seconds / 200 MB by default. Output has no audio. Court calibration may be unavailable for some views.</small></p>
+<p><small>Any resolution (resized to 1280x720, aspect preserved) - 1-60 fps - up to 60 seconds / 200 MB by default. Output has no audio. Court calibration may be unavailable for some views.</small></p>
 <button id="submit">Analyse video</button><p id="error" role="alert"></p></form>
 <section id="job" hidden><span class="tag">VIDEO JOB</span><h2 id="state">Preparing</h2><p id="details" aria-live="polite"></p><small id="id"></small>
 <div id="links" hidden><p><a id="download" download="rallymirror.mp4">Download video</a><a id="reportlink" target="_blank" rel="noopener">View run report</a></p><video id="video" controls playsinline></video><pre id="report"></pre></div></section>

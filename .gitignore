@@ -40,6 +40,7 @@ calibration_pred/
 /docs/chat_exports/
 *.zip
 *.installing
+
 # Share the selected final checkpoint; keep future experiment checkpoints local.
 /models/racket*.pt
 /models/racket*.pth

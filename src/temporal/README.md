@@ -85,7 +85,7 @@ or parallel track — not folded into the five phases:
 - **Rally state** (`schema.FUTURE_RALLY_STATES`: between_points /
   serve_initiation / rally_active / point_end).
 
-## Running the demo
+## Running the pipeline
 
 Use the project virtual environment (it has OpenCV, torch, etc.):
 

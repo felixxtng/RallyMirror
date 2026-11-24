@@ -1,0 +1,2 @@
+# separate requirements for deployment-specific dependencies
+-r requirements.txt

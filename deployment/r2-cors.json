@@ -1,6 +1,6 @@
 [
   {
-    "AllowedOrigins": ["https://YOUR-API.onrender.com"],
+    "AllowedOrigins": ["https://rallymirror-api.onrender.com"],
     "AllowedMethods": ["GET", "PUT", "HEAD"],
     "AllowedHeaders": ["Content-Type", "Range"],
     "ExposeHeaders": ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],

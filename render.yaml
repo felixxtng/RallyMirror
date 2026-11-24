@@ -1,0 +1,43 @@
+# Review paid plans/region and secret values before applying this Blueprint.
+services:
+  - type: web
+    name: rallymirror-api
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./deployment/Dockerfile.api
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: JOB_BACKEND
+        value: runpod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rallymirror-jobs
+          property: connectionString
+      - key: APP_ACCESS_TOKEN
+        sync: false
+      - key: WORKER_SECRET
+        sync: false
+      - key: API_BASE_URL
+        sync: false
+      - key: RUNPOD_ENDPOINT_ID
+        sync: false
+      - key: RUNPOD_API_KEY
+        sync: false
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: JOB_TIMEOUT_SECONDS
+        value: "1800"
+databases:
+  - name: rallymirror-jobs
+    plan: basic-256mb
+    region: singapore
+    databaseName: rallymirror
+    user: rallymirror

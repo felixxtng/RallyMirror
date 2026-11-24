@@ -2,8 +2,9 @@ from ultralytics import YOLO
 
 
 class PlayerTracker:
-    def __init__(self, model_name="yolo11n.pt"):
+    def __init__(self, model_name="yolo11n.pt", device=None):
         self.model = YOLO(model_name)
+        self.device = device
 
     def track_people(self, frame):
         results = self.model.track(
@@ -11,6 +12,7 @@ class PlayerTracker:
             classes=[0],
             persist=True,
             tracker="bytetrack.yaml",
+            device=self.device,
             verbose=False
         )
 

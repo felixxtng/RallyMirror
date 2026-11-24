@@ -100,7 +100,7 @@ def run_shuttle_tracker(video_path, out_dir, weights, device, threshold=0.5):
 
     out_dir = Path(out_dir)
     run_offline_demo(video_path, str(weights), str(out_dir),
-                     threshold=threshold, device=device)
+                     threshold=threshold, device=device, render_video=False)
     return out_dir / "shuttle_tracking.jsonl"
 
 
@@ -312,22 +312,31 @@ def _load_raw_pose(pose_path):
 # Driver
 # ---------------------------------------------------------------------------
 
-def run(video_stem, args, device):
+def run(video_stem, args, device, *, input_path=None, workspace=None, progress=None):
     from src.demo_pipeline import VIDEO_DIR
 
-    video_path = VIDEO_DIR / f"{video_stem}.mp4"
+    video_path = Path(input_path) if input_path else VIDEO_DIR / f"{video_stem}.mp4"
     if not video_path.exists():
         raise FileNotFoundError(f"video not found: {video_path}")
 
-    work = OUTPUT_DIR / video_stem
+    if workspace:
+        # Workspaces are deployment-owned and must never reuse stale artifacts.
+        existing = Path(workspace)
+        if existing.exists() and any(existing.iterdir()):
+            raise FileExistsError(f"Workspace must be empty: {workspace}")
+    work = Path(workspace) if workspace else OUTPUT_DIR / video_stem
     work.mkdir(parents=True, exist_ok=True)
+
+    notify = progress or (lambda stage: None)
+    notify("court")
 
     # --- Stage 1: court (LOO-gated) ---
     model, names = load_checkpoint(args.checkpoint, device)
     calibration_path, court_info = get_court_calibration(
         video_stem, video_path, model, names, device,
         frames=args.court_frames, save_overlay=False, overwrite=args.overwrite,
-        loo_gate_m=args.loo_gate, write=True)
+        loo_gate_m=args.loo_gate, write=True,
+        output_path=work / "court.json" if workspace else None)
 
     court_note = ""
     calibration = None
@@ -344,19 +353,23 @@ def run(video_stem, args, device):
         print(f"[combined] {court_note}; lines omitted, ROI off")
 
     # --- Stage 2: pose (+ racket keypoint) ---
+    notify("pose_and_racket")
     pose_path = get_pose_data(
         video_stem, video_path, calibration_path,
         save_preview_video=False, max_frames=args.max_frames,
         overwrite=args.overwrite,
-        racket_weights=str(RACKET_WEIGHTS), racket_device=device)
+        racket_weights=str(RACKET_WEIGHTS), racket_device=device, tracker_device=device,
+        output_path=work / "pose.jsonl" if workspace else None)
 
     # --- Stage 3: canonicalize to NEAR/FAR slots ---
+    notify("canonicalize_and_map")
     canonicalize_pose(video_stem, video_path, pose_path, calibration_path)
 
     # --- Stage 4: court mapping (court_xy for the TCN court feature) ---
     map_court_coords(video_stem, pose_path, calibration_path)
 
     # --- Stage 5: shuttle -> speed signal (+ positions for the overlay) ---
+    notify("shuttle")
     labels_csv = _prepare_shuttle(video_stem, video_path, work, args, device)
     shuttle_track = None
     if labels_csv is not None:
@@ -370,12 +383,14 @@ def run(video_stem, args, device):
               "'unknown' and phase quality will drop (model trained WITH shuttle)")
 
     # --- Stage 6: phase inference ---
+    notify("phase")
     phases = run_phase_inference(pose_path, PHASE_MODEL, args.window_size,
                                  args.smoothing, device)
     print(f"[combined] phases emitted: {len(phases)} (frame, player) labels")
 
     # --- Stage 7: render (court + boxes + pose + phase + shuttle + minimap) ---
-    output_path = OUTPUT_DIR / f"{video_stem}_combined.mp4"
+    output_path = work / "overlay.mp4" if workspace else OUTPUT_DIR / f"{video_stem}_combined.mp4"
+    notify("render")
     render_combined(video_path, output_path, pose_path, phases, calibration,
                     court_note, args.mode, args.max_frames, args.threshold,
                     show_minimap=not args.no_minimap, shuttle_track=shuttle_track)
@@ -404,9 +419,7 @@ def _prepare_shuttle(video_stem, video_path, work, args, device):
         print(f"[combined] running shuttle tracker -> {track_dir}")
         src_jsonl = run_shuttle_tracker(video_path, track_dir, SHUTTLE_WEIGHTS,
                                         device, threshold=args.shuttle_threshold)
-        # The tracker always writes its own shuttle_demo.mp4; we draw the shuttle
-        # onto the combined video instead, so drop that throwaway second video.
-        (track_dir / "shuttle_demo.mp4").unlink(missing_ok=True)
+        # Intermediate shuttle rendering is disabled; only the combined pass encodes overlays.
     return shuttle_jsonl_to_labels_csv(src_jsonl, work / "labels.csv")
 
 

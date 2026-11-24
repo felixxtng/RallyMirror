@@ -1,0 +1,20 @@
+FROM python:3.13-slim
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 INFERENCE_DEVICE=cuda
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libglib2.0-0 libgl1 libegl1 libgomp1 libportaudio2 && rm -rf /var/lib/apt/lists/*
+# Match Torch/torchvision to an actually available CUDA wheel pair. These build
+# arguments must be vetted on the selected Runpod GPU before image promotion.
+ARG TORCH_VERSION=2.11.0
+ARG TORCHVISION_VERSION=0.26.0
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
+COPY requirements-api.txt requirements-worker.txt ./
+RUN pip install --no-cache-dir torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} --index-url ${TORCH_INDEX_URL} && pip install --no-cache-dir -r requirements-worker.txt
+COPY src ./src
+COPY configs ./configs
+COPY models ./models
+# Required base detector. This is ignored in Git, so prepare it in the build
+# workspace first; preflight verifies its selected checksum before inference.
+COPY yolo11n.pt ./yolo11n.pt
+RUN python -m src.deployment.preflight && useradd --create-home app && chown -R app:app /app
+USER app
+CMD ["python", "-u", "-m", "src.deployment.runpod_worker"]

@@ -54,3 +54,8 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+
+# Final selected shuttle checkpoint and deployment templates
+!/models/shuttle_full_b8/
+!/models/shuttle_full_b8/best.pt
+!deployment/*.env.example

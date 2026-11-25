@@ -1,9 +1,6 @@
-# CPU inference runtime. Docker installs the matching CPU Torch wheel pair from
-# the official PyTorch index before resolving this file. A Linux image build and
-# real-video acceptance test are required before treating it as a release image.
+# Candidate Linux GPU runtime. Verify container smoke test before promotion.
 -r requirements-api.txt
-torch==2.14.1
-torchvision==0.29.2
+runpod==1.12.0
 ultralytics==8.4.174
 mediapipe==1.1.0
 numpy==2.5.4
@@ -15,6 +12,3 @@ pandas>=2.2,<4
 matplotlib>=3.9,<4
 PyYAML==6.0.3
 lap>=0.5.12,<1
-# The local CPU queue does not submit Runpod jobs. This dependency also permits
-# an explicitly configured cloud-worker invocation; it does not enable CUDA.
-runpod==1.12.0

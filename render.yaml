@@ -5,8 +5,8 @@ services:
     runtime: docker
     plan: starter
     region: singapore
-    dockerfilePath: ./deployment/Dockerfile.api
-    dockerContext: .
+    dockerContext: ./frontend
+    dockerfilePath: ./frontend/deployment/Dockerfile.api
     healthCheckPath: /healthz
     envVars:
       - key: JOB_BACKEND

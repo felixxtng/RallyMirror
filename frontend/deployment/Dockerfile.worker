@@ -1,9 +1,7 @@
 FROM python:3.13-slim-bookworm
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    JOB_BACKEND=local \
-    JOB_ROOT=/data/jobs \
-    INFERENCE_DEVICE=cpu \
+    INFERENCE_DEVICE=cuda \
     MPLBACKEND=Agg \
     YOLO_CONFIG_DIR=/tmp/ultralytics \
     OMP_NUM_THREADS=2 \
@@ -14,11 +12,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ffmpeg libglib2.0-0 libgl1 libegl1 libgomp1 libportaudio2 \
     && rm -rf /var/lib/apt/lists/*
-# Install the matching CPU wheel pair first. The requirements below accept the
-# +cpu local version, so this does not pull CUDA runtime wheels from PyPI.
-ARG TORCH_VERSION=2.14.1
-ARG TORCHVISION_VERSION=0.29.2
-ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+ARG TORCH_VERSION=2.11.0
+ARG TORCHVISION_VERSION=0.26.0
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
 COPY backend/requirements-api.txt backend/requirements-worker.txt ./
 RUN pip install --no-cache-dir \
        torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} \
@@ -36,4 +32,4 @@ RUN python -m src.deployment.preflight \
     && mkdir -p /data/jobs \
     && chown app:app /data/jobs
 USER app
-CMD ["sh", "-c", "python -m src.deployment.preflight && exec python -u -m src.deployment.worker"]
+CMD ["sh", "-c", "python -m src.deployment.preflight && exec python -u -m src.deployment.runpod_worker"]

@@ -11,6 +11,8 @@ outputs/*
 !outputs/.gitkeep
 *.pt
 *.pth
+!checkpoints/*.pt
+!checkpoints/*.pth
 
 # Local source videos and extracted rally data are shared separately.
 /training videos/
@@ -26,3 +28,8 @@ data/shuttle/clips/*/*
 !data/shuttle/clips/*/labels.csv
 !data/shuttle/clips/*/meta.json
 !data/shuttle/README.md
+
+# Court module outputs
+dataset/
+runs/
+calibration_pred/

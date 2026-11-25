@@ -1,0 +1,26 @@
+[
+  {
+    "path": "models/yolo11n.pt",
+    "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1"
+  },
+  {
+    "path": "models/court_final.pt",
+    "sha256": "09e968a6ecc6dd3673101789da4ac5661c1f5db908a47ebd41e2b877c34d0413"
+  },
+  {
+    "path": "models/phase_tcn.pt",
+    "sha256": "1403c241b7535fd71519211c4074eed9b1a93320e0d88d7f288bf009e77a02e5"
+  },
+  {
+    "path": "models/pose_landmarker_lite.task",
+    "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
+  },
+  {
+    "path": "models/racket_center_v006.pt",
+    "sha256": "313da2f2f2958744d81318d1dbdef9b0b84fd2eb6ca95d7250ec0555f07283d5"
+  },
+  {
+    "path": "models/shuttle_full_b8/best.pt",
+    "sha256": "273e34974c29d0c066de99080b265a4b9ab4d2e7e8058654bf2185e3bfc96b91"
+  }
+]

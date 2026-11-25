@@ -1,0 +1,98 @@
+{
+  "analysis_mode": "phases",
+  "frames": 120,
+  "pose_records": 173,
+  "modules": {
+    "court": {
+      "status": "available",
+      "records": 1
+    },
+    "tracking": {
+      "status": "available",
+      "records": 173
+    },
+    "pose": {
+      "status": "available",
+      "records": 173
+    },
+    "racket": {
+      "status": "available",
+      "records": 173
+    },
+    "shuttle": {
+      "status": "available",
+      "records": 119
+    },
+    "phases": {
+      "status": "available",
+      "records": 77
+    }
+  },
+  "warnings": [],
+  "court": {
+    "status": "ok",
+    "loo_mean_m": 0.10557396863345003,
+    "reason": null
+  },
+  "player_slots": [
+    1,
+    2
+  ],
+  "phase_counts": {
+    "movement": 32,
+    "stroke": 23,
+    "ready": 11,
+    "recovery": 11
+  },
+  "coverage_note": "Counts describe available predictions, not correctness or evaluation accuracy.",
+  "input": {
+    "duration_seconds": 4.0,
+    "fps": 30.0,
+    "source_width": 1280,
+    "source_height": 720,
+    "width": 1280,
+    "height": 720,
+    "resized": false
+  },
+  "device": "cpu",
+  "models": [
+    {
+      "path": "models/yolo11n.pt",
+      "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1"
+    },
+    {
+      "path": "models/court_final.pt",
+      "sha256": "09e968a6ecc6dd3673101789da4ac5661c1f5db908a47ebd41e2b877c34d0413"
+    },
+    {
+      "path": "models/phase_tcn.pt",
+      "sha256": "1403c241b7535fd71519211c4074eed9b1a93320e0d88d7f288bf009e77a02e5"
+    },
+    {
+      "path": "models/pose_landmarker_lite.task",
+      "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
+    },
+    {
+      "path": "models/racket_center_v006.pt",
+      "sha256": "313da2f2f2958744d81318d1dbdef9b0b84fd2eb6ca95d7250ec0555f07283d5"
+    },
+    {
+      "path": "models/shuttle_full_b8/best.pt",
+      "sha256": "273e34974c29d0c066de99080b265a4b9ab4d2e7e8058654bf2185e3bfc96b91"
+    }
+  ],
+  "stage_seconds": {
+    "court": 1.464,
+    "pose_and_racket": 78.418,
+    "canonicalize_and_map": 0.154,
+    "shuttle": 53.016,
+    "phase": 0.304,
+    "render": 1.532,
+    "encode": 0.445
+  },
+  "total_seconds": 142.533,
+  "output": "H.264 MP4, silent, original frame rate, normalized to 1280x720",
+  "inference_mode": "combined",
+  "provenance": "All seven views use one combined run's predictions. Processing time is for that shared run.",
+  "feature_contract": "input resized to 1280x720 (aspect-preserving letterbox); 18 keypoints; original shuttle normalization 960x544; existing temporal logic"
+}

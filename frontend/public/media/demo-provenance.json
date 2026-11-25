@@ -1,0 +1,59 @@
+{
+  "created": "2026-11-25T11:33:45.746879+00:00",
+  "source_clip": "rally01.mp4",
+  "source_sha256": "cbaa6ab2c2bc071d3bd128aef5b13a85931132e34f779cab4384616fafddfdca",
+  "runtime_source": "felixxtng/RallyMirror",
+  "runtime_commit": "017a366aed9ec4091881b678412e14e2eca518f8",
+  "inference": "fresh automatic inference with the six selected checkpoints; no manual ground-truth labels",
+  "caveat": "Demonstration footage, not a held-out evaluation or an accuracy benchmark.",
+  "input": {
+    "duration_seconds": 4.0,
+    "fps": 30.0,
+    "source_width": 1280,
+    "source_height": 720
+  },
+  "views": [
+    {
+      "mode": "combined",
+      "video": "combined-analysis.mp4",
+      "bytes": 878816,
+      "sha256": "711f2035832d05f35027d59747d2ae431238df3d1c7a77bc03ed0a387badbb34"
+    },
+    {
+      "mode": "court",
+      "video": "court-analysis.mp4",
+      "bytes": 557673,
+      "sha256": "ca99bf40f1700553dacfd4a3570b3ca5988dd5173f163349bddc520045237f98"
+    },
+    {
+      "mode": "tracking",
+      "video": "tracking-analysis.mp4",
+      "bytes": 615987,
+      "sha256": "3a24e61ed6f065208aa1d5073698451a8022ee4ab936ec2602f44c8a0de8d4a8"
+    },
+    {
+      "mode": "pose",
+      "video": "pose-analysis.mp4",
+      "bytes": 694768,
+      "sha256": "d34579e70401136b9d1b7fd7a9a59d21b6a6b3baeb9732e44331b477b934c127"
+    },
+    {
+      "mode": "racket",
+      "video": "racket-analysis.mp4",
+      "bytes": 656039,
+      "sha256": "2a671cf218fff543f4ccc10beb911dc39d4611078f475a9c13734582c9be85c8"
+    },
+    {
+      "mode": "shuttle",
+      "video": "shuttle-analysis.mp4",
+      "bytes": 594435,
+      "sha256": "240bab9c837dec6e0e2a6bee581291f19ea59aea213ed8502f151d005442412e"
+    },
+    {
+      "mode": "phases",
+      "video": "phases-analysis.mp4",
+      "bytes": 673121,
+      "sha256": "33417478fbb1466c20d35a9d2fa6f03712f821164f56b75e938f5bfdf666e345"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+name: rallymirror
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.api
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${RALLYMIRROR_PORT:-8000}:8000"
+    environment:
+      PORT: "8000"
+      JOB_BACKEND: local
+      JOB_ROOT: /data/jobs
+      DATABASE_URL: sqlite:////data/jobs/jobs.sqlite3
+      FRONTEND_DIST: /app/dist
+      APP_ACCESS_TOKEN: "${APP_ACCESS_TOKEN:-}"
+      MAX_UPLOAD_BYTES: "${MAX_UPLOAD_BYTES:-209715200}"
+      MAX_VIDEO_SECONDS: "${MAX_VIDEO_SECONDS:-60}"
+      JOB_TIMEOUT_SECONDS: "${JOB_TIMEOUT_SECONDS:-1800}"
+    volumes:
+      - jobs:/data/jobs
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.worker
+    init: true
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      JOB_BACKEND: local
+      JOB_ROOT: /data/jobs
+      DATABASE_URL: sqlite:////data/jobs/jobs.sqlite3
+      INFERENCE_DEVICE: cpu
+      MAX_UPLOAD_BYTES: "${MAX_UPLOAD_BYTES:-209715200}"
+      MAX_VIDEO_SECONDS: "${MAX_VIDEO_SECONDS:-60}"
+      JOB_TIMEOUT_SECONDS: "${JOB_TIMEOUT_SECONDS:-1800}"
+      OMP_NUM_THREADS: "${WORKER_CPU_THREADS:-2}"
+      MKL_NUM_THREADS: "${WORKER_CPU_THREADS:-2}"
+      OPENBLAS_NUM_THREADS: "${WORKER_CPU_THREADS:-2}"
+    volumes:
+      - jobs:/data/jobs
+
+volumes:
+  jobs:

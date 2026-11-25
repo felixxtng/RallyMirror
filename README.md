@@ -1,6 +1,8 @@
 # RallyMirror
 Badminton Tracking AI
 
+RallyMirror Studio frontend: [setup, API connection and checks](frontend/README.md).
+
 Court detection from manually labelled points and random initial weights:
 [training guide](court_module/TRAINING_GUIDE.md) and
 [sharing the model and demo videos](court_module/SHARING.md).

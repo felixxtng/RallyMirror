@@ -1,0 +1,23 @@
+.git
+.work
+.venv
+.runtime
+node_modules
+dist
+test-results
+playwright-report
+coverage
+backend/outputs
+backend/data
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/*.pyo
+*.log
+**/*.log
+.env
+.env.*
+deployment/*.env
+**/*.pem
+**/*.key
+# backend/models is deliberately included. Worker preflight verifies its hashes.

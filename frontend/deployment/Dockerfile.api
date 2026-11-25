@@ -1,0 +1,29 @@
+FROM node:24-bookworm-slim AS frontend-build
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY index.html vite.config.ts tsconfig.json playwright.config.ts ./
+COPY src ./src
+COPY public ./public
+RUN npm run build
+
+FROM python:3.13-slim-bookworm AS api
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    JOB_BACKEND=local \
+    JOB_ROOT=/data/jobs \
+    FRONTEND_DIST=/app/dist
+WORKDIR /app/backend
+COPY backend/requirements-api.txt ./requirements-api.txt
+RUN pip install --no-cache-dir -r requirements-api.txt \
+    && useradd --uid 10001 --create-home app \
+    && mkdir -p /data/jobs \
+    && chown app:app /data/jobs
+COPY backend/src/deployment ./src/deployment
+RUN touch src/__init__.py
+COPY --from=frontend-build /build/dist /app/dist
+USER app
+EXPOSE 8000
+HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=3 \
+    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.getenv('PORT','8000')+'/healthz',timeout=3).close()"
+CMD ["sh", "-c", "exec uvicorn src.deployment.api:create_app --factory --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]

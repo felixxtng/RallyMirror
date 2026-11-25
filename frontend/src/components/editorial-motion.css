@@ -1,0 +1,45 @@
+/* Native adaptation of blue-design-studio's staged type and viewport reveals.
+   No default opacity/transform hides content when scripting is unavailable. */
+.editorial-visual,
+.editorial-line {
+  display: contents;
+}
+
+.editorial-word {
+  display: inline-block;
+  vertical-align: baseline;
+  white-space: nowrap;
+  transform-origin: 50% 100%;
+}
+
+.editorial-accessible {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  user-select: none;
+}
+
+/* CSS is an immediate safeguard while preference observers cancel WAAPI. */
+[data-motion='off'] .editorial-word,
+[data-motion='off'] .editorial-reveal {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  will-change: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editorial-word,
+  .editorial-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    will-change: auto !important;
+  }
+}
